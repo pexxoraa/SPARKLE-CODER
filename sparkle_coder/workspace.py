@@ -120,7 +120,7 @@ class Workspace:
                 raise WorkspaceError("Expected a directory.")
         return path
 
-    def files(self, pattern: str = "*", limit: int = 1000) -> list[str]:
+    def files(self, pattern: str = "*", limit: int | None = 1000) -> list[str]:
         result = []
         for base, dirs, names in os.walk(self.root, followlinks=False):
             dirs[:] = sorted(d for d in dirs if not self.protected((d,))
@@ -131,7 +131,7 @@ class Workspace:
                 if not self.protected((name,)) and not p.is_symlink() and p.is_file():
                     if fnmatch.fnmatch(relative, pattern):
                         result.append(relative)
-                        if len(result) >= limit:
+                        if limit is not None and len(result) >= limit:
                             return result
         return result
 
@@ -160,19 +160,16 @@ class Workspace:
         return "\n\n".join(guides)[:24000]
 
     def fingerprint(self) -> str | None:
-        """Content hash for freshness, excluding generated/secret files; bounded work."""
+        """Stream project contents so large projects can also have fresh checks."""
         digest = hashlib.sha256()
-        total = 0
-        files = self.files(limit=5001)
-        if len(files) > 5000:
-            return None
         try:
-            for relative in files:
+            for relative in self.files(limit=None):
                 p = self.path(relative)
-                total += p.stat().st_size
-                if total > 30_000_000:
-                    return None
-                digest.update(relative.encode() + b"\0" + p.read_bytes() + b"\0")
+                digest.update(relative.encode() + b"\0")
+                with p.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(128 * 1024), b""):
+                        digest.update(chunk)
+                digest.update(b"\0")
         except (OSError, WorkspaceError):
             return None
         return digest.hexdigest()

@@ -22,8 +22,8 @@ class Config:
     max_steps: int | None = None
     max_seconds: int | None = None
     max_total_tokens: int | None = None
-    request_timeout: int = 120
-    command_timeout: int = 120
+    request_timeout: int = 300
+    command_timeout: int | None = None
     execution: str = "local"
     auto_approve: bool = False
     docker_image: str = "sparkle-coder-tools:local"
@@ -61,11 +61,11 @@ class Config:
             raise ValueError("execution must be local or docker.")
         if type(self.max_tokens) is not int or self.max_tokens <= 0:
             raise ValueError("max_tokens must be a positive integer.")
-        for name in ("max_steps", "max_seconds", "max_total_tokens"):
+        for name in ("max_steps", "max_seconds", "max_total_tokens", "command_timeout"):
             value = getattr(self, name)
             if value is not None and (type(value) is not int or value <= 0):
                 raise ValueError(f"{name} must be a positive integer or null for unlimited.")
-        for name in ("request_timeout", "command_timeout"):
+        for name in ("request_timeout",):
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer.")
@@ -109,7 +109,7 @@ def load_config(workspace: Path, overrides: dict | None = None) -> Config:
     }.items() if value})
     # Optional run caps use None as an explicit "unlimited" override. This lets
     # the browser and CLI remove legacy caps from an older nemotron.toml.
-    unlimited = {"max_steps", "max_seconds", "max_total_tokens"}
+    unlimited = {"max_steps", "max_seconds", "max_total_tokens", "command_timeout"}
     data.update({key: value for key, value in (overrides or {}).items()
                  if value is not None or key in unlimited})
     config = Config(**data)
@@ -132,8 +132,9 @@ context_chars = 120000
 # max_steps = 40
 # max_seconds = 1800
 # max_total_tokens = 250000
-request_timeout = 120
-command_timeout = 120
+request_timeout = 300
+# Commands run until they finish or you press Stop. Optional cap:
+# command_timeout = 600
 
 # Local commands require approval by default and run with your OS permissions.
 execution = "local"

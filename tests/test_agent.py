@@ -40,22 +40,22 @@ class AgentTests(unittest.TestCase):
         self.assertTrue((agent.session.directory / "report.md").exists())
 
     def test_final_claim_cannot_bypass_failed_acceptance(self):
-        provider = SequenceProvider([Completion("Everything works perfectly.", [], {}) for _ in range(3)])
+        provider = SequenceProvider([Completion("Everything works perfectly.", [], {}) for _ in range(4)])
         agent = self.agent(provider, [python_command("-c", "raise SystemExit(9)")])
-        self.assertEqual(agent.run(), "blocked")
-        self.assertEqual(len(agent.session.state["checks"]), 3)
+        self.assertEqual(agent.run(), "needs_input")
+        self.assertEqual(len(agent.session.state["checks"]), 1)
         self.assertTrue(all(c["exit_code"] == 9 for c in agent.session.state["checks"]))
 
-    def test_no_checks_means_unverified(self):
-        provider = SequenceProvider([Completion("Done.", [], {}), Completion("Done.", [], {})])
-        self.assertEqual(self.agent(provider).run(), "unverified")
+    def test_unchanged_claims_request_help_without_claiming_checks_passed(self):
+        provider = SequenceProvider([Completion("Done.", [], {}) for _ in range(4)])
+        self.assertEqual(self.agent(provider).run(), "needs_input")
 
     def test_default_run_has_no_model_call_cap(self):
         sequence = [calls(("list_files", {})) for _ in range(41)]
-        sequence.extend([Completion("Done.", [], {}), Completion("Done.", [], {})])
+        sequence.extend([Completion("Done.", [], {}) for _ in range(4)])
         agent = self.agent(SequenceProvider(sequence))
         self.assertIsNone(agent.config.max_steps)
-        self.assertEqual(agent.run(), "unverified")
+        self.assertEqual(agent.run(), "needs_input")
         self.assertGreater(agent.session.state["usage"]["calls"], 40)
 
     def test_checks_are_stale_after_a_file_change(self):

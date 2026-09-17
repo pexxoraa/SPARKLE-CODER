@@ -1,4 +1,25 @@
-# SPARKLE CODER 0.3.2 — files, supervision, device storage
+# SPARKLE CODER 0.4.0 — reliable repairs and resumable work
+
+This update removes premature completion cutoffs, adds automatic check discovery,
+and continues repairs while the code or check evidence changes. The agent now
+requests a specific next step when it actually needs help. Failures remain visible.
+
+Build/Ask modes separate implementation from read-only project questions.
+Temporary API/network failures retry with visible progress. Slow model requests
+can be stopped without waiting for their response to execute any actions.
+
+Connect Nemotron now includes **Show**/**Remove configured key**, connection
+status that survives saving, optional API timeouts and **Remove all run caps**.
+Commands have no default deadline. Existing standard two-minute command settings
+migrate to unlimited; custom caps remain editable. The app cannot change provider
+context/output limits, rate limits or account quota.
+
+Large tool output is compacted only in the model request; full saved history stays
+on the device. Large projects can now have current content-based verification.
+The same failing command can run again after a repair. Denied commands do not
+keep requesting approval in one run, but can be retried after you resume.
+
+## Earlier improvements
 
 Version 0.3.1 renamed the app, package, browser branding, icon and launchers to
 SPARKLE CODER. Existing device data is detected automatically. The file transfer
@@ -21,11 +42,11 @@ remain memory-only.
 | Inspect what is happening | Run monitor | Shows model requests, tools, paths, commands, results, elapsed time and real emitted output |
 | Review edits before they happen | Review each file edit | Shows file-tool diffs for one-use approval |
 | Pause work | Pause / Resume | Holds the next action after the current operation finishes |
-| End a run | Stop | Cancels commands and prevents subsequent actions; model requests may finish first |
+| End a run | Stop | Stops the local run promptly; an already submitted provider request may finish remotely |
 | Keep evidence | Save report / Save log | Downloads summaries/checks and persistent JSONL activity |
 | Choose where data lives | Device storage | Copies managed data to an empty device folder and remembers the choice |
 | Configure model access | Connect Nemotron | Paste a hosted NVIDIA key in **API key**; the value is cleared when the app quits |
-| Keep a task running | Optional run caps | Blank model-call, elapsed-time, and total-token fields mean unlimited; Stop remains available |
+| Keep a task running | Connect Nemotron → Remove all run caps | Clears model-call, elapsed-time, total-token and command-duration caps; Save connection applies it |
 
 File-tool approval and undo do not cover changes made by an approved shell
 command. Commands remain individually reviewable. No tool can guarantee that

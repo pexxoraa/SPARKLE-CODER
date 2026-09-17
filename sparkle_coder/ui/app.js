@@ -66,7 +66,7 @@ id("app").innerHTML = `
               <div class="suggestions">
                 <button class="suggestion" data-prompt="Build a responsive web app for tracking personal projects. Include persistence, useful error states, and tests. Start by inspecting this project."><span data-icon="code"></span><strong>Build an app</strong><span>Turn an idea into working code</span></button>
                 <button class="suggestion" data-prompt="Inspect this project, identify a concrete bug, reproduce it with a test, and fix it without changing unrelated behavior."><span data-icon="bug"></span><strong>Fix a bug</strong><span>Find the cause and verify a fix</span></button>
-                <button class="suggestion" data-prompt="Explore this project. Explain its architecture and how to build and test it. Do not change files yet."><span data-icon="folder"></span><strong>Explore a project</strong><span>Understand the code you have</span></button>
+                <button class="suggestion" data-mode="ask" data-prompt="Explore this project. Explain its architecture and how to build and test it. Do not change files yet."><span data-icon="folder"></span><strong>Explore a project</strong><span>Understand the code you have</span></button>
               </div>
               <button id="demoButton" class="demo-button"><span class="demo-play" data-icon="play"></span><span><strong>Take it for a test run</strong><span>A local demo. No API key needed.</span></span><span class="demo-arrow">↗</span></button>
             </div>
@@ -80,6 +80,7 @@ id("app").innerHTML = `
             <div class="approval-actions"><button id="denyCommand" class="button secondary">Deny</button><button id="allowCommand" class="button primary">Allow once</button></div>
           </div>
           <form id="taskForm" class="composer">
+            <div class="task-mode-row"><label for="taskMode">Mode</label><select id="taskMode"><option value="build">Build · edit and verify</option><option value="ask">Ask · inspect and explain</option></select><span id="runBudgetLabel">Unlimited run</span></div>
             <label class="sr-only" for="goal">Task for Nemotron</label>
             <textarea id="goal" rows="3" maxlength="12000" placeholder="Describe what you want to build or change…"></textarea>
             <div id="verificationFields" class="verification-fields" hidden><label for="verifyCommands">Required checks <span>One command per line</span></label><textarea id="verifyCommands" rows="2" placeholder="For example: python3 -m unittest discover -s tests -v"></textarea><p>These checks run automatically when the agent proposes completion.</p></div>
@@ -127,11 +128,12 @@ id("app").innerHTML = `
     <label for="connectionType">Connection</label><select id="connectionType"><option value="nvidia">NVIDIA API</option><option value="local">Local or custom server</option></select>
     <label for="baseUrl">API base URL</label><input id="baseUrl" type="url" required autocomplete="off">
     <label for="modelId">Model ID</label><input id="modelId" list="modelOptions" required autocomplete="off"><datalist id="modelOptions"><option value="nvidia/nemotron-3-super-120b-a12b"><option value="nvidia/nemotron-3-nano-30b-a3b"><option value="nvidia/nemotron-3-ultra-550b-a55b"></datalist>
-    <label for="apiKey">API key <span id="keyHint">Paste it here; it is never written to disk</span></label><input id="apiKey" type="password" autocomplete="new-password" placeholder="Paste your NVIDIA key here">
+    <label for="apiKey">API key <span id="keyHint">Paste it here; it is never written to disk</span></label><div class="folder-input"><input id="apiKey" type="password" autocomplete="new-password" placeholder="Paste your NVIDIA key here"><button type="button" id="showApiKey" class="button secondary" aria-pressed="false">Show</button></div><button type="button" id="clearApiKey" class="text-button key-clear">Remove configured key</button>
     <p class="settings-note">For NVIDIA-hosted models, paste the key from <a href="https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b" target="_blank" rel="noreferrer">build.nvidia.com</a> here. It stays in memory and is cleared when SPARKLE CODER quits. The CLI alternative is the <code>NVIDIA_API_KEY</code> environment variable.</p>
     <div class="settings-row"><div><label for="executionMode">Run commands in</label><select id="executionMode"><option value="local">This computer</option><option value="docker">Docker container</option></select></div><div><label for="toolFormat">Tool format</label><select id="toolFormat"><option value="native">Native tool calls</option><option value="json">JSON fallback</option></select></div></div>
-    <details class="advanced"><summary>Optional run caps</summary><div class="settings-row"><div><label for="maxSteps">Model calls <span>Blank = unlimited</span></label><input id="maxSteps" type="number" min="1" placeholder="Unlimited"></div><div><label for="maxSeconds">Elapsed seconds <span>Blank = unlimited</span></label><input id="maxSeconds" type="number" min="1" placeholder="Unlimited"></div></div><div class="settings-row"><div><label for="maxTotalTokens">Total tokens <span>Blank = unlimited</span></label><input id="maxTotalTokens" type="number" min="1" placeholder="Unlimited"></div><div><label for="maxTokens">Output tokens per call</label><input id="maxTokens" type="number" min="256" max="131072"></div></div></details>
-    <p class="settings-note">Runs have no model-call, time, or total-token cap unless you enter one. Use <strong>Stop</strong> whenever you want to end a task. Output tokens per response and command timeouts remain endpoint safeguards.</p>
+    <button type="button" id="removeRunCaps" class="button secondary unlimited-button">Remove all run caps</button><p class="settings-note" id="capsHint">Model calls, run duration, total tokens and command duration can all be unlimited.</p>
+    <details class="advanced"><summary>Run and connection settings</summary><div class="settings-row"><div><label for="maxSteps">Model calls <span>Blank = unlimited</span></label><input id="maxSteps" type="number" min="1" placeholder="Unlimited"></div><div><label for="maxSeconds">Elapsed seconds <span>Blank = unlimited</span></label><input id="maxSeconds" type="number" min="1" placeholder="Unlimited"></div></div><div class="settings-row"><div><label for="maxTotalTokens">Total tokens <span>Blank = unlimited</span></label><input id="maxTotalTokens" type="number" min="1" placeholder="Unlimited"></div><div><label for="commandTimeout">Command seconds <span>Blank = unlimited</span></label><input id="commandTimeout" type="number" min="1" placeholder="Unlimited"></div></div><div class="settings-row"><div><label for="maxTokens">Output tokens per call</label><input id="maxTokens" type="number" min="1"></div><div><label for="requestTimeout">API response timeout <span>Seconds before retry</span></label><input id="requestTimeout" type="number" min="1"></div></div></details>
+    <p class="settings-note">Use <strong>Stop</strong> to end a task. Temporary connection failures retry automatically. Your model provider still controls its context size, output limit, rate limits and account quota.</p>
     <p class="settings-note" id="executionNote">Local commands use your computer's permissions. You approve each agent-proposed command.</p>
     <div id="connectionResult" class="inline-result" role="status" hidden></div>
     <div class="dialog-actions"><button type="button" id="testConnection" class="button secondary">Test connection</button><button type="submit" class="button primary" id="saveSettings">Save connection</button></div>
@@ -161,12 +163,13 @@ async function api(path, body) {
     ...(body === undefined ? {} : {body: JSON.stringify(body)}),
   });
   const result = await response.json();
-  if (!response.ok || result.error) throw new Error(result.error || "The request failed.");
+  const runState=/^\/runs(?:\/|$)/.test(path)&&typeof result.status==="string";
+  if (!response.ok || (result.error&&!runState)) throw new Error(result.error || "The request failed.");
   return result;
 }
 function toast(message) { id("toast").textContent = message; id("toast").classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => id("toast").classList.remove("visible"), 5000); }
 function busy() { return currentRun && ["queued", "running", "approval", "pausing", "paused_by_user", "stopping"].includes(currentRun.status); }
-function friendly(status) { return ({checked:"Checks passed",running:"Working",queued:"Starting",approval:"Needs approval",stopping:"Stopping",pausing:"Pausing",paused_by_user:"Paused by you",blocked:"Blocked",unverified:"Unverified",paused:"Paused",interrupted:"Stopped",undone:"Undone"})[status] || "Ready"; }
+function friendly(status) { return ({checked:"Checks passed",answered:"Answer ready",needs_input:"Your input needed",running:"Working",queued:"Starting",approval:"Needs approval",stopping:"Stopping",pausing:"Pausing",paused_by_user:"Paused by you",blocked:"Needs attention",unverified:"Checks pending",paused:"Paused",interrupted:"Stopped",undone:"Undone"})[status] || "Ready"; }
 function shortModel(model) { if (model.includes("super")) return "Nemotron Super"; if (model.includes("ultra")) return "Nemotron Ultra"; if (model.includes("nano")) return "Nemotron Nano"; return model.split("/").pop() || "Nemotron"; }
 async function action(fn) { try { await fn(); } catch (error) { toast(error.message); } }
 function emptyPanel(text, description) { const e = node("div", "empty-detail"); const symbol = node("span"); symbol.innerHTML = icon("code"); e.append(symbol, node("strong", "", text), node("p", "", description)); return e; }
@@ -186,9 +189,12 @@ function renderProvider() {
   id("connectionSub").textContent=s.connected ? shortModel(s.model) : "Connection settings";
   id("settingsButton").classList.toggle("connected",s.connected);
   id("appVersion").textContent="PERSONAL EDITION · "+appState.version;
+  id("runBudgetLabel").textContent=[s.max_steps,s.max_seconds,s.max_total_tokens,s.command_timeout].some(v=>v!=null)?"Custom run caps":"Unlimited run";
 }
 function renderControls() {
   const working=busy(); id("runButton").disabled=!!working || transferBusy; id("runButton").firstChild.textContent=working ? "Working " : currentSession ? "Continue " : "Run agent";
+  id("taskMode").disabled=!!working;
+  id("reviewEdits").disabled=!!working||id("taskMode").value==="ask";
   id("stopButton").hidden=!working; id("stopButton").disabled=currentRun?.status==="stopping";
   id("projectSelect").disabled=!!working || transferBusy; id("addProject").disabled=!!working||transferBusy; id("newTask").disabled=!!working||transferBusy;
   const status=working ? currentRun.status : currentSession?.status;
@@ -229,7 +235,22 @@ function renderSession(session) {
     lastMessageKey=messageKey; if(nearBottom || !session) container.scrollTop=container.scrollHeight;
   }
   id("resultBanner").hidden=!session || busy() || session.status==="running";
-  if(session && !busy()) { id("resultBanner").textContent=friendly(session.status)+(session.status==="checked" ? " · Inspect the recorded checks and file changes." : session.status==="unverified" ? " · This result still needs verification." : session.status==="blocked" ? " · "+(session.summary||"Review the error and continue with more information.") : " · You can continue this task."); id("resultBanner").className="result-banner "+session.status; }
+  if(session && !busy()) {
+    const banner=id("resultBanner");banner.replaceChildren();banner.className="result-banner "+session.status;
+    banner.append(node("strong","",friendly(session.status)));
+    const attention=["needs_input","blocked","unverified"].includes(session.status);
+    const description=attention?(session.recovery?.message||session.summary||"Review the checks and continue this task."):session.status==="checked"?"Recorded checks passed. Review the changes and coverage in Checks.":session.status==="answered"?"Project question answered. Switch to Build when you want changes.":"Work is saved. Continue when you are ready.";
+    banner.append(node("p","",description));
+    if(session.status!=="undone") {
+      const actions=node("div","recovery-actions");
+      if(attention||["paused","interrupted"].includes(session.status)) {
+        const resume=node("button","button primary","Resume task");resume.onclick=()=>id("taskForm").requestSubmit();actions.append(resume);
+      }
+      if(session.recovery?.action==="connection") {const settings=node("button","button secondary","Connection settings");settings.onclick=openSettings;actions.prepend(settings);}
+      if(attention||session.status==="checked") {const checks=node("button","button secondary","Review checks");checks.onclick=()=>{setTab("checks");document.body.classList.add("details-open");};actions.append(checks);}
+      banner.append(actions);
+    }
+  }
   id("callsMetric").textContent=session?.usage?.calls ?? "—";
   const usage=session?.usage; id("tokensMetric").textContent=usage ? ((usage.prompt_tokens||0)+(usage.completion_tokens||0)).toLocaleString() : "—";
   id("changeCount").textContent=session?.changed_files?.length||0; id("checkCount").textContent=session?.checks?.length||0;
@@ -298,8 +319,8 @@ async function loadHistory() {
     if(index<6) { const recent=node("button","recent-item",s.goal); recent.title=s.goal; recent.onclick=()=>action(()=>loadSession(s.id)); id("recentTasks").append(recent); }
   });
 }
-async function loadSession(sessionId) { if(busy()) { toast("Finish or stop the current task first."); return; } currentRun=null; runEvents=[]; const data=await api("/projects/"+projectId+"/sessions/"+sessionId); runEvents=data.events||[]; renderSession(data); id("verifyCommands").value=(data.required_checks||[]).join("\n"); changeView("build"); if(tab==="changes")await loadChanges(); }
-async function newTask() { if(busy()||transferBusy)return; currentRun=null; runEvents=[]; renderSession(null); id("goal").value=""; id("verifyCommands").value=""; id("verificationFields").hidden=true; changeView("build"); setTab("activity"); id("goal").focus(); }
+async function loadSession(sessionId) { if(busy()) { toast("Finish or stop the current task first."); return; } currentRun=null; runEvents=[]; const data=await api("/projects/"+projectId+"/sessions/"+sessionId); runEvents=data.events||[]; id("taskMode").value=data.task_mode||"build"; renderSession(data); id("verifyCommands").value=(data.required_checks||[]).join("\n"); changeView("build"); if(tab==="changes")await loadChanges(); }
+async function newTask() { if(busy()||transferBusy)return; currentRun=null; runEvents=[]; id("taskMode").value="build"; renderSession(null); id("goal").value=""; id("verifyCommands").value=""; id("verificationFields").hidden=true; changeView("build"); setTab("activity"); id("goal").focus(); }
 async function selectProject(next) { if(busy()||transferBusy)return; await api("/select-project",{project_id:next}); projectId=next; selectedFile=""; fileData=null; id("fileSearch").value=""; id("fileName").textContent="Select a file"; id("filePreview").textContent="Select a file to inspect its contents."; renderProjects(); await newTask(); await Promise.all([loadFiles(),loadHistory()]); }
 async function refreshState() { appState=await api("/state"); projectId=projectId||appState.selected_project; renderProjects(); renderProvider(); if(appState.active_run&&!currentRun) { currentRun=appState.active_run; projectId=currentRun.project_id; renderProjects(); schedulePoll(50); } }
 
@@ -310,7 +331,7 @@ async function pollRun() {
   try {
     const result=await api("/runs/"+runId+"?after="+after); if(currentRun?.id!==runId)return;
     currentRun=result; runEvents.push(...result.events); runEvents=runEvents.slice(-600);
-    if(result.session)renderSession(result.session); else renderControls();
+    if(result.session){id("taskMode").value=result.session.task_mode||"build";renderSession(result.session);}else renderControls();
     if(result.error)toast(result.error);
     renderMonitor();
     const changeKey=(result.session?.changed_files||[]).join()+":"+(result.session?.actions?.length||0);
@@ -325,7 +346,7 @@ async function startTask(event) {
   if(appState.settings.base_url.includes("integrate.api.nvidia.com")&&!appState.settings.key_configured) { openSettings(); toast("Add your NVIDIA API key to start a live task."); return; }
   id("runButton").disabled=true;
   try {
-    const result=await api("/runs",{project_id:projectId,goal,verify:id("verifyCommands").value.split("\n").map(x=>x.trim()).filter(Boolean),session_id:currentSession?.undone?null:currentSession?.id,review_edits:id("reviewEdits").checked});
+    const result=await api("/runs",{project_id:projectId,goal,verify:id("verifyCommands").value.split("\n").map(x=>x.trim()).filter(Boolean),session_id:currentSession?.undone?null:currentSession?.id,review_edits:id("reviewEdits").checked,task_mode:id("taskMode").value});
     currentRun=result; runEvents=[]; lastChangeKey=""; id("goal").value=""; changeView("build"); renderControls(); schedulePoll(50);
   } finally { renderControls(); }
 }
@@ -335,18 +356,22 @@ async function answerApproval(allow) { if(!currentRun?.approval)return; id("allo
 function openSettings() {
   const s=appState.settings; id("baseUrl").value=s.base_url; id("modelId").value=s.model; id("apiKey").value="";
   id("apiKey").placeholder=s.key_configured?"Key is set. Leave blank to keep it.":"Paste your key here";
-  id("keyHint").textContent=s.key_configured?"A key is already configured":"Kept in memory while the app is open";
+  id("apiKey").type="password";id("showApiKey").textContent="Show";id("showApiKey").setAttribute("aria-pressed","false");
+  id("keyHint").textContent=s.key_configured?(s.key_source==="environment"?"Loaded from your environment":"Key ready for this app session"):"Paste your NVIDIA API key below";
+  id("clearApiKey").disabled=!s.key_configured;
   id("executionMode").value=s.execution; id("toolFormat").value=s.tool_format;
   id("maxSteps").value=s.max_steps ?? ""; id("maxSeconds").value=s.max_seconds ?? "";
   id("maxTotalTokens").value=s.max_total_tokens ?? ""; id("maxTokens").value=s.max_tokens;
+  id("commandTimeout").value=s.command_timeout ?? "";id("requestTimeout").value=s.request_timeout;
+  id("capsHint").textContent="Blank run caps mean unlimited. Changes apply to your next run or resumed task.";
   id("connectionType").value=s.base_url.includes("integrate.api.nvidia.com")?"nvidia":"local"; id("connectionResult").hidden=true; id("settingsDialog").showModal();
 }
 async function saveSettings(test=false) {
   const optionalNumber=(name)=>{const raw=id(name).value.trim(); if(!raw)return null; const value=Number(raw); return Number.isInteger(value)?value:raw;};
-  const body={base_url:id("baseUrl").value.trim(),model:id("modelId").value.trim(),api_key:id("apiKey").value.trim(),execution:id("executionMode").value,tool_format:id("toolFormat").value,max_steps:optionalNumber("maxSteps"),max_seconds:optionalNumber("maxSeconds"),max_total_tokens:optionalNumber("maxTotalTokens"),max_tokens:Number(id("maxTokens").value)};
+  const body={base_url:id("baseUrl").value.trim(),model:id("modelId").value.trim(),api_key:id("apiKey").value.trim(),execution:id("executionMode").value,tool_format:id("toolFormat").value,max_steps:optionalNumber("maxSteps"),max_seconds:optionalNumber("maxSeconds"),max_total_tokens:optionalNumber("maxTotalTokens"),command_timeout:optionalNumber("commandTimeout"),request_timeout:Number(id("requestTimeout").value),max_tokens:Number(id("maxTokens").value)};
   id("saveSettings").disabled=true; id("testConnection").disabled=true;
   try {
-    await api("/settings",body); id("apiKey").value=""; await refreshState();
+    await api("/settings",body); id("apiKey").value=""; await refreshState(); id("clearApiKey").disabled=!appState.settings.key_configured; id("keyHint").textContent=appState.settings.key_configured?"Key ready for this connection":"No API key configured";
     if(test) { id("connectionResult").hidden=false; id("connectionResult").textContent="Checking the model endpoint…"; const result=await api("/connect",{}); id("connectionResult").textContent=result.message; id("connectionResult").className="inline-result "+(result.connected?"success":""); if(result.models?.length) { id("modelOptions").replaceChildren(); result.models.filter(x=>x.toLowerCase().includes("nemotron")).forEach(x=>{const option=node("option");option.value=x;id("modelOptions").append(option);}); } await refreshState(); }
     else { id("settingsDialog").close(); toast("Connection saved. Your key stays in this app process."); }
   } catch(error) { id("connectionResult").hidden=false; id("connectionResult").className="inline-result"; id("connectionResult").textContent=error.message; }
@@ -383,7 +408,7 @@ function renderSupervision() {
   id("pauseButton").disabled=!working||currentRun?.status==="stopping";
   id("monitorPause").disabled=!working||currentRun?.status==="stopping";id("monitorPause").textContent=paused?"Resume":"Pause";
   id("monitorStop").disabled=!working||currentRun?.status==="stopping";
-  id("reviewEdits").disabled=working;
+  id("reviewEdits").disabled=working||id("taskMode").value==="ask";
   id("headerRunStatus").textContent=friendly(currentRun?.status||currentSession?.status);
   id("monitorLive").textContent=working?"Live":"";
   id("supervisionStrip").hidden=!working;
@@ -392,6 +417,8 @@ function renderSupervision() {
   renderFileButtons();
 }
 function eventDescription(e) {
+  if(e.kind==="model_retry")return "Reconnecting · attempt "+e.attempt+" in "+e.delay+"s · "+e.reason;
+  if(e.kind==="verification_start")return "Running project check: "+e.command;
   const labels={model_start:"Model request started",model_end:"Model response received",tool_start:"Started "+(e.tool||"tool"),tool_end:(e.ok?"Completed ":"Failed ")+(e.tool||"tool"),command_start:"Command started",command_end:e.cancelled?"Command stopped":"Command exited "+e.exit_code,approval_requested:"Approval needed",approval_decision:e.allowed?"You approved this action":"You denied this action",paused:"Paused by you",resumed:"Resumed by you",pause_requested:"Pause requested",stop_requested:"Stop requested",finished:"Task finished",message:e.text};
   return labels[e.kind]||e.text||e.kind;
 }
@@ -487,7 +514,11 @@ id("saveStorage").onclick=()=>action(async()=>{id("saveStorage").disabled=true;i
 document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>changeView(b.dataset.view));
 document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>id(b.dataset.close).close());
-document.querySelectorAll(".suggestion").forEach(b=>b.onclick=()=>{id("goal").value=b.dataset.prompt;id("goal").focus();});
+document.querySelectorAll(".suggestion").forEach(b=>b.onclick=()=>{id("taskMode").value=b.dataset.mode||"build";renderControls();id("goal").value=b.dataset.prompt;id("goal").focus();});
+id("taskMode").onchange=renderControls;
+id("showApiKey").onclick=()=>{const show=id("apiKey").type==="password";id("apiKey").type=show?"text":"password";id("showApiKey").textContent=show?"Hide":"Show";id("showApiKey").setAttribute("aria-pressed",String(show));};
+id("clearApiKey").onclick=()=>action(async()=>{await api("/settings",{base_url:id("baseUrl").value.trim(),clear_key:true});await refreshState();id("apiKey").value="";id("keyHint").textContent="Key removed for this app session";id("clearApiKey").disabled=true;});
+id("removeRunCaps").onclick=()=>{["maxSteps","maxSeconds","maxTotalTokens","commandTimeout"].forEach(name=>id(name).value="");id("capsHint").textContent="All run caps cleared. Click Save connection to apply.";};
 id("newTask").onclick=()=>action(newTask);
 id("taskForm").onsubmit=e=>action(()=>startTask(e));
 id("demoButton").onclick=()=>action(startDemo);

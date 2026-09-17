@@ -2,16 +2,21 @@
 
 from dataclasses import dataclass
 import json
+import queue
+import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
 
 from .config import Config
+from . import __version__
 
 
 class ModelError(RuntimeError):
-    pass
+    def __init__(self, message, *, action="retry"):
+        super().__init__(message)
+        self.action = action
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -84,20 +89,58 @@ class NemotronClient:
     def __init__(self, config: Config):
         self.config = config
         self.opener = urllib.request.build_opener(NoRedirect())
+        self.observe = lambda *_: None
+        self.should_stop = lambda: False
+
+    def bind_runtime(self, observe, should_stop):
+        self.observe, self.should_stop = observe, should_stop
+
+    def _read(self, request):
+        # A cancelled request may finish at the provider, but its response cannot
+        # execute tools. The run itself stops promptly, even during a slow socket read.
+        completed = queue.Queue(maxsize=1)
+        def fetch():
+            try:
+                with self.opener.open(request, timeout=self.config.request_timeout) as response:
+                    result = response.read(12_000_001)
+            except Exception as exc:
+                if isinstance(exc, urllib.error.HTTPError):
+                    exc.close()
+                result = exc
+            completed.put(result)
+        threading.Thread(target=fetch, name="nemotron-http", daemon=True).start()
+        while not self.should_stop():
+            try:
+                result = completed.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            if isinstance(result, Exception):
+                raise result
+            return result
+        raise ModelError("Stopped by the user. The provider may still finish the submitted request.")
+
+    def wait_retry(self, delay):
+        while delay > 0:
+            if self.should_stop():
+                raise ModelError("Stopped by the user during connection recovery.")
+            interval = min(0.1, delay)
+            time.sleep(interval)
+            delay -= interval
 
     def request(self, path: str, body: dict | None = None):
-        headers = {"Accept": "application/json", "User-Agent": "sparkle-coder/0.3.2"}
+        headers = {"Accept": "application/json", "User-Agent": "sparkle-coder/" + __version__}
         if self.config.api_key:
             headers["Authorization"] = "Bearer " + self.config.api_key
         payload = None if body is None else json.dumps(body).encode("utf-8")
         if payload is not None:
             headers["Content-Type"] = "application/json"
         for attempt in range(3):
+            if self.should_stop():
+                raise ModelError("Stopped by the user before the model request.")
             request = urllib.request.Request(self.config.base_url.rstrip("/") + path,
                                              data=payload, headers=headers)
             try:
-                with self.opener.open(request, timeout=self.config.request_timeout) as response:
-                    raw = response.read(12_000_001)
+                raw = self._read(request)
                 if len(raw) > 12_000_000:
                     raise ModelError("API response exceeded the 12 MB limit.")
                 return json.loads(raw)
@@ -105,22 +148,34 @@ class NemotronClient:
                 exc.close()
                 if exc.code in (429, 500, 502, 503, 504) and attempt < 2:
                     try:
-                        delay = min(10, max(1, float(exc.headers.get("Retry-After", 2 ** attempt))))
-                    except ValueError:
+                        delay = min(60, max(1, float(exc.headers.get("Retry-After", 2 ** attempt))))
+                    except (ValueError, TypeError):
                         delay = 2 ** attempt
-                    time.sleep(delay)
+                    self.observe("model_retry", {"attempt": attempt + 2, "delay": delay,
+                                                 "reason": f"Model API HTTP {exc.code}"})
+                    self.wait_retry(delay)
                     continue
                 hints = {
-                    401: "Check the API key configured for this model endpoint.",
+                    401: "Open Connect Nemotron, replace the API key, test the connection, then resume this task.",
                     403: "Check model access and endpoint permissions.",
                     404: "Check the base URL and exact model ID.",
                     400: "Check model tool support and extra_body; try JSON tool mode for a server without a tool parser.",
                     429: "The endpoint is rate-limited; resume this session later.",
                 }
-                raise ModelError(f"Model API HTTP {exc.code}. {hints.get(exc.code, 'Try again or check server logs.')}") from None
+                raise ModelError(f"Model API HTTP {exc.code}. {hints.get(exc.code, 'The endpoint is unavailable. Resume this saved task when it recovers.')}",
+                                 action="connection" if exc.code in (400, 401, 403, 404) else "retry") from None
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                if attempt < 2:
+                    delay = 2 ** attempt
+                    self.observe("model_retry", {"attempt": attempt + 2, "delay": delay,
+                                                 "reason": f"Connection interrupted ({type(exc).__name__})"})
+                    self.wait_retry(delay)
+                    continue
+                hint = ("For a slow model, increase API response timeout under Connect Nemotron → Run and connection settings. "
+                        if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError)
+                        else "Check the server address and network connection. ")
                 raise ModelError(f"Cannot reach the model endpoint ({type(exc).__name__}). "
-                                 "Check its address, network access, and timeout.") from None
+                                 "Three connection attempts failed. " + hint + "Resume this task; your work is saved.") from None
             except (json.JSONDecodeError, UnicodeDecodeError):
                 raise ModelError("The endpoint did not return valid JSON.") from None
 

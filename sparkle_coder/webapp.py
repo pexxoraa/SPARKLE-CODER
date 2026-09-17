@@ -40,7 +40,7 @@ def default_app_dir() -> Path:
 
 SETTINGS = ("base_url", "model", "tool_format", "execution", "max_steps", "max_seconds",
             "max_total_tokens", "max_tokens", "request_timeout", "command_timeout")
-SETTINGS_SCHEMA_VERSION = 2
+SETTINGS_SCHEMA_VERSION = 3
 LEGACY_RUN_CAPS = {"max_steps": 40, "max_seconds": 1800, "max_total_tokens": 250000}
 
 
@@ -78,11 +78,18 @@ class AppService:
             self.data["projects"] = saved.get("projects", [])
             self.data["selected_project"] = saved.get("selected_project")
             saved_version = saved.get("settings_version", 1)
-            if type(saved_version) is not int or saved_version < SETTINGS_SCHEMA_VERSION:
+            if type(saved_version) is not int:
+                saved_version = 1
+            if saved_version < 2:
                 for key, legacy_value in LEGACY_RUN_CAPS.items():
                     if self.data["settings"].get(key) == legacy_value:
                         self.data["settings"][key] = None
                         migrated = True
+            if saved_version < 3 and self.data["settings"].get("command_timeout") == 120:
+                self.data["settings"]["command_timeout"] = None
+            if saved_version < 3 and self.data["settings"].get("request_timeout") == 120:
+                self.data["settings"]["request_timeout"] = 300
+            migrated = migrated or saved_version < SETTINGS_SCHEMA_VERSION
         self.lock = threading.RLock()
         self.keys = {}
         self.connected_endpoint = None
@@ -116,6 +123,7 @@ class AppService:
     def public_settings(self):
         config = self.config()
         return {**self.data["settings"], "key_configured": bool(config.api_key),
+                "key_source": ("memory" if config.base_url.rstrip("/") in self.keys else "environment") if config.api_key else "none",
                 "connected": self.connected_endpoint == (config.base_url, config.model)}
 
     def configure(self, payload):
@@ -129,12 +137,15 @@ class AppService:
             key = payload.get("api_key", "")
             if not isinstance(key, str) or len(key) > 2000 or any(c in key for c in "\r\n"):
                 raise ValueError("Invalid API key.")
+            previous = self.config()
             if payload.get("clear_key"):
                 self.keys[config.base_url] = ""
             elif key:
                 self.keys[config.base_url] = key.strip()
             self.data["settings"] = candidate
-            self.connected_endpoint = None
+            current = self.config()
+            if (previous.base_url, previous.model, previous.api_key) != (current.base_url, current.model, current.api_key):
+                self.connected_endpoint = None
             self.save()
             return self.public_settings()
 
@@ -201,7 +212,7 @@ class AppService:
                     if m.get("content") and (m["role"] == "assistant"
                                             or m["role"] == "user" and m["content"] in user_requests)]
         return {key: state.get(key) for key in
-                ("id", "goal", "status", "created", "updated", "plan", "usage", "summary", "model", "undone")} | {
+                ("id", "goal", "status", "created", "updated", "plan", "usage", "summary", "model", "undone", "task_mode", "recovery")} | {
             "messages": messages, "actions": state["actions"][-100:], "checks": state["checks"][-40:],
             "changed_files": sorted({r["path"] for r in state["journal"]}),
             "required_checks": state["required_checks"],
@@ -247,7 +258,9 @@ class AppService:
                             "diff": "\n".join(lines)[:40000], "truncated": len("\n".join(lines)) > 40000})
         return Redactor((self.config().api_key,)).value(changes)
 
-    def start(self, project_id, goal, verify=None, session_id=None, demo=False, review_edits=False):
+    def start(self, project_id, goal, verify=None, session_id=None, demo=False, review_edits=False, task_mode=None):
+        if task_mode not in (None, "build", "ask"):
+            raise ValueError("Task mode must be build or ask.")
         if type(review_edits) is not bool:
             raise ValueError("Review edits must be true or false.")
         if not isinstance(goal, str) or len(goal) > 12000 or not goal.strip() and not session_id:
@@ -275,6 +288,7 @@ class AppService:
             self.save()
 
             def work():
+                session = None
                 try:
                     with workspace.lock():
                         if session_id:
@@ -290,6 +304,8 @@ class AppService:
                             session.save()
                         else:
                             session = Session.create(workspace, goal, verify, config.public_info())
+                        session.state["task_mode"] = task_mode or session.state.get("task_mode", "build")
+                        session.save()
                         with job.lock:
                             job.bind(session)
                             job.status = "running"
@@ -303,8 +319,15 @@ class AppService:
                 except Exception as exc:
                     with job.lock:
                         job.error = clean_terminal(Redactor((config.api_key,)).text(str(exc)))
+                        if session is not None:
+                            session.state.update({"status": "needs_input", "summary": job.error,
+                                "recovery": {"action": "retry", "message": job.error}})
+                            try:
+                                session.save()
+                            except (OSError, ValueError):
+                                job.error += " Recovery status could not be saved; check the device folder permissions and free space."
                         job.emit(job.error)
-                        job.finish("blocked", job.error)
+                        job.finish("needs_input", job.error)
 
             job.thread = threading.Thread(target=work, name="nemotron-task", daemon=True)
             job.thread.start()

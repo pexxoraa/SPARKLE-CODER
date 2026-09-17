@@ -1,113 +1,79 @@
-# Validation report — SPARKLE CODER 0.3.2
+# Validation report — SPARKLE CODER 0.4.0
 
-Validated on Linux with Python 3.12.14.
+Validated on Linux with Python 3.12.14 on 2026-09-17.
 
-**72 automated tests passed. Zero failures, zero errors, zero skipped tests.**
-The complete final output is in TEST_RESULTS.txt. Responses from model providers
-in these tests were scripted; no live Nemotron generation was performed.
+**93 automated Python tests passed. No failures, errors or skipped tests.**
+The complete output is in [TEST_RESULTS.txt](TEST_RESULTS.txt). The standalone
+JavaScript browser API-helper test also passed. Model responses were scripted;
+no live NVIDIA credentials or local inference server were available.
 
-## Rename and storage compatibility
+## Reliability workflows exercised
 
-Two additional tests verify that the new SPARKLE CODER storage path is used for
-new installations, while existing settings, storage pointers, projects, and
-history remain discoverable in the previous Nemotron Workspace location.
-Existing SPARKLE CODER settings take precedence when both installations exist.
+- Six real edit/check/repair rounds finish with passing acceptance checks, beyond
+  the old three-attempt cutoff. Identical unsuccessful completion claims request
+  help without inventing a pass or repeatedly rerunning unchanged acceptance tests.
+- A verification command that failed repeatedly can run again after its source
+  is repaired. An environment setup command invalidates cached failed checks.
+- Existing Python tests are discovered, approved and executed. Node discovery
+  selects real package scripts in a nested project and skips watch/placeholder
+  commands. An empty unittest suite does not count as passing verification.
+- A denied check is not requested again during that run; resuming can obtain a
+  fresh approval. Discovery also handles commands denied before any check record.
+- Ask mode rejects file edits and command execution, returns an answer without
+  requiring build checks, and can resume as a Build task.
+- A request for user input saves a concrete next step and does not execute later
+  tool calls from the same response. An unexpected provider exception saves the
+  correct recovery status instead of leaving history marked as running.
+- HTTP 503 and network errors recover on retry, and retry events are observable.
+  Stop cancels retry backoff and releases a run during a slow HTTP response.
+  Authentication errors remain actionable and are not blindly retried.
+- Large tool output is shortened only in the request copy; original history is
+  preserved. A project exceeding the former 30 MB freshness cutoff still obtains
+  a content hash that changes after an edit.
+- Saving a tested connection retains its status. Changing the key resets it;
+  key material is absent from saved settings. Optional command caps validate
+  correctly, and older default command caps migrate without removing chosen run caps.
 
-Three run-loop tests verify that model-call, elapsed-time, and total-token caps
-are optional, unlimited by default, and still enforce a positive cap when one is
-explicitly configured. The browser settings accept blank values as unlimited.
+## Existing workflows retained
 
-## New file, supervision, and storage behaviors exercised
+The suite also exercises native and JSON model protocols, a real local HTTP
+browser-app workflow, authenticated file import/download/copy/export, binary
+round trips, existing-file preservation, device storage migration, saved run
+history and logs, file diffs and undo conflicts, command/edit approval, live
+subprocess output, pause/resume/stop, launch-token and origin checks, key
+redaction, exact file hashes, guidance, memory, and workspace boundaries.
 
-Sixteen additional behavioral tests passed:
+Real subprocess tests include Python execution, a JavaScript assertion under
+Node.js, C compilation and execution, explicit command timeout, and cancellation
+of a command without a default timeout. The desktop Python launcher starts an
+isolated local engine, serves its API, and shuts down cleanly on Linux.
 
-- Binary import/download preserves exact bytes, with authenticated downloads.
-- Imports and duplication preserve existing content and create distinct copies.
-- ZIP exports include built artifacts and exclude credentials, dependencies,
-  and agent state. Project-folder exports create new copies without overwrites.
-- Imports reject parent traversal, protected paths, and malformed payloads.
-- Imports and full-project exports are blocked while a task owns the workspace.
-- Storage switching preserves files, session history, logs, and undo records,
-  and the selected location persists after application restart.
-- Nonempty destinations are refused. External projects keep their original
-  locations. A failed copy leaves the original storage selection intact.
-- A proposed file-tool edit does not execute before its diff is approved;
-  denial leaves the project unchanged.
-- Pause blocks an action returned by the model until Resume. Stop while paused
-  exits without applying that pending action.
-- Model/tool/command/approval events are recorded and survive reopening.
-  Reports and full saved logs download through the authenticated API.
-- Real subprocess output is observable before the process ends.
-- A fake API key split across separate process writes is redacted from live output.
+## Source and package checks
 
-## Browser-app behaviors retained
+- JavaScript syntax passed. Static markup checks found 162 unique UI element IDs
+  with no duplicates or missing literal JavaScript ID references.
+- `node tests/test_ui_client.js` exercised the actual browser API helper: a saved
+  run error returns resumable run state, while failed HTTP requests and ordinary
+  action errors still surface. This guards against endless polling of a failed run.
+- Python source parsed, Unix launcher shell syntax passed, and the macOS plist
+  identifies version 0.4.0 and its supplied executable.
+- The package built and installed into an isolated target with no downloads or
+  third-party runtime dependencies. Version 0.4.0, check-discovery code, all four
+  UI assets, and the desktop entry point were present.
+- Git whitespace checks passed. Temporary app state, test environments, package
+  build products and credentials are excluded from the published source.
 
-- An actual local HTTP API workflow: create a demo project, wait for graphical
-  command approval, allow a command, run failing tests, repair the code, pass
-  checks, read files and diffs, inspect history, and undo file edits.
-- Approval denial, one-use approval IDs, stop while awaiting approval, refusal
-  to start a second active task, and safe handling of a repeated Stop request.
-- Cancellation kills a running subprocess before it can perform a delayed file
-  write. Cancellation during a model call prevents the returned edit executing.
-- The graphical Python entry point starts an isolated local engine, serves its
-  authenticated API, handles Quit, and removes its instance record on exit.
-  This lifecycle test does not open or automate a browser.
-- Launch-token authentication, wrong Host/Origin rejection, cross-site request
-  rejection, strict JSON settings requests, static-asset allowlisting, and CSP.
-- API keys are not returned to the UI or persisted in settings. Switching
-  endpoints does not reuse a different endpoint's key. Restarting clears keys.
-- Invalid settings leave the previous configuration intact. Model discovery
-  is checked through a scripted provider.
-- Existing project files are preserved. File reads reject protected credential
-  paths and parent traversal. A saved task can resume after reopening the app.
-- Undo refuses to overwrite a manual edit made after the agent's changes.
+## Not exercised here
 
-## Existing agent behaviors retained
+- Live Nemotron generation quality, tool selection, response latency, cost or
+  comparative performance against other coding agents.
+- Visual browser rendering or complete browser interactions. Playwright is
+  installed, but its Chromium executable is absent in this environment. Static
+  markup and JavaScript tests do not replace visual, accessibility, clipboard,
+  download and native folder-picker testing on your device.
+- Windows/macOS execution, Docker, mobile SDKs, game engines, GPU or embedded
+  targets, and native installer signing. Their target toolchains still determine
+  which software can actually be built and tested on a particular device.
 
-- Real file-edit and command-execution workflows with failing acceptance tests,
-  repair, and current passing checks.
-- Compatible native-tool HTTP requests and JSON fallback through local scripted
-  model endpoints, including real file changes and command execution.
-- Model discovery, authentication errors, bounded rate-limit retries, malformed
-  responses, duplicate tool-call IDs, and separate reasoning content.
-- Real Python execution, a JavaScript assertion under Node.js, and C compilation
-  followed by execution of the compiled program.
-- Command timeouts, output limits, denial without side effects, and removal of
-  model credentials from the child-process environment.
-- File boundaries, secret-file protection, symlink rejection, stale-hash edit
-  protection, exact-edit ambiguity, and rejecting internal Python tool names.
-- Project memory, nested guidance, workspace locks, saved state, and recovery
-  without blindly replaying actions that may already have run.
-- Context trimming without orphaned tool messages, recent user corrections,
-  stale verification rejection, failed-check gates, unverified results, and
-  resumable optional run caps.
-
-## Build and source checks
-
-- JavaScript passed Node's syntax check. Static DOM checks found 154 unique UI
-  element IDs and no missing literal JavaScript ID references.
-- Python files parsed successfully. Unix launcher shell syntax passed; macOS
-  Info.plist parsed and references its supplied executable.
-- The package built and installed into an isolated target without downloading
-  dependencies. Version 0.3.2, all four UI assets, and the graphical entry point
-  were present in the installed package.
-- Repository checks confirm that the source includes UI assets, launchers,
-  setup guides, tests, and recorded results, excluding temporary application
-  state, session keys, caches, and build output.
-
-## Not validated here
-
-- Visual browser behavior, layout, accessibility, clipboard integration, native
-  folder-picker behavior, and click-through interactions:
-  the environment's supervised browser preview service was unavailable. API
-  integration tests do not substitute for visual and browser-interaction QA.
-- Real Nemotron generation, latency, tool-call quality, and model cost. No NVIDIA
-  key or running local inference server was provided.
-- Windows and macOS launches. Platform-specific launchers and Windows process
-  handling are supplied, but this environment runs Linux.
-- Docker execution, mobile SDKs, game engines, embedded targets, GPU workloads,
-  standalone phone/tablet execution, or native installer signing.
-- Relative performance against other coding agents.
-
-The next practical check is to open the supplied launcher on your desktop,
-run the offline demo, and then run one small task against your Nemotron endpoint.
+Reproduce: `python -m unittest discover -s tests -v`,
+`node tests/test_ui_client.js`, and `node --check sparkle_coder/ui/app.js`.

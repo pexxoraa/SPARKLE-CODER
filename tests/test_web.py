@@ -85,7 +85,7 @@ class WebTests(unittest.TestCase):
             result = self.api("/api/runs/" + run_id)
             if result["status"] in statuses:
                 return result
-            if result["status"] == "blocked":
+            if result["status"] in ("blocked", "needs_input"):
                 self.fail(str(result))
             time.sleep(0.03)
         self.fail("Run did not reach expected status: " + str(result))
@@ -231,13 +231,13 @@ class WebTests(unittest.TestCase):
         self.api("/api/settings", {"base_url": "http://127.0.0.1:8000/v1", "model": "scripted"})
         project_id = self.app.data["selected_project"]
         run = self.api("/api/runs", {"project_id": project_id, "goal": "Explain the project."})
-        first = self.await_run(run["id"], {"unverified"})
+        first = self.await_run(run["id"], {"needs_input"})
         reopened = AppService(Path(self.tmp.name), provider_factory=FakeProvider)
         self.assertEqual(reopened.history(project_id)[0]["id"], first["session_id"])
         followup = reopened.start(project_id, "Also explain the tests.", session_id=first["session_id"])
         job = reopened.job(followup["id"])
         job.thread.join(5)
-        self.assertEqual(job.status, "unverified")
+        self.assertEqual(job.status, "needs_input")
         saved = reopened.snapshot(project_id, first["session_id"])
         self.assertIn("Also explain the tests.", [m["content"] for m in saved["messages"]])
         reopened.close()
@@ -308,7 +308,7 @@ class LauncherTests(unittest.TestCase):
                     connection.request("GET", "/api/state", headers={"X-Sparkle-Token": info["token"]})
                     response = connection.getresponse()
                     self.assertEqual(response.status, 200)
-                    self.assertEqual(json.loads(response.read())["version"], "0.3.2")
+                    self.assertEqual(json.loads(response.read())["version"], "0.4.0")
                     connection.request("POST", "/api/quit", body="{}", headers={
                         "X-Sparkle-Token": info["token"], "Content-Type": "application/json"})
                     response = connection.getresponse()

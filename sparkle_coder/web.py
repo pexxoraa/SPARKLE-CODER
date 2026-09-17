@@ -209,7 +209,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = app.demo()
             elif path == "/api/runs":
                 result = app.start(body["project_id"], body.get("goal", ""), body.get("verify"),
-                                   body.get("session_id"), review_edits=body.get("review_edits", False))
+                                   body.get("session_id"), review_edits=body.get("review_edits", False),
+                                   task_mode=body.get("task_mode"))
             elif len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] in ("import", "duplicate", "export-folder"):
                 result = app.file_action(parts[2], parts[3], body)
             elif len(parts) == 4 and parts[:2] == ["api", "runs"]:

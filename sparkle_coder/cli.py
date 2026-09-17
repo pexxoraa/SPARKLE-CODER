@@ -14,7 +14,7 @@ from .state import Session
 from .workspace import Redactor, Workspace, atomic_write, clean_terminal
 
 
-EXIT_CODES = {"checked": 0, "paused": 2, "blocked": 2, "unverified": 3, "interrupted": 130}
+EXIT_CODES = {"checked": 0, "answered": 0, "needs_input": 2, "paused": 2, "blocked": 2, "unverified": 3, "interrupted": 130}
 
 
 def approve(command: str) -> bool:
@@ -45,6 +45,8 @@ def add_runtime(parser):
     parser.add_argument("--max-total-tokens", type=int,
                         help="Optional total token cap; omit for unlimited")
     parser.add_argument("--max-tokens", type=int, help="Maximum output tokens per model response")
+    parser.add_argument("--command-timeout", type=int, help="Optional seconds per command; omit for unlimited")
+    parser.add_argument("--task-mode", choices=("build", "ask"), help="Build software or ask a read-only project question")
 
 
 def parser():
@@ -89,7 +91,7 @@ def parser():
 
 def runtime_config(args, workspace):
     names = ("model", "base_url", "tool_format", "execution", "auto_approve",
-             "max_steps", "max_seconds", "max_total_tokens", "max_tokens")
+             "max_steps", "max_seconds", "max_total_tokens", "max_tokens", "command_timeout")
     return load_config(workspace.root, {name: getattr(args, name, None) for name in names})
 
 
@@ -237,8 +239,10 @@ def main(argv=None):
                         session.repair_interrupted_calls()
                         session.state["messages"].append({"role": "user", "content": goal})
                         session.state.setdefault("user_requests", [session.state["goal"]]).append(goal)
+                    session.state["task_mode"] = args.task_mode or session.state.get("task_mode", "build")
                     Agent(workspace, session, config, provider, approve).run()
                 return 0
+            session.state["task_mode"] = args.task_mode or session.state.get("task_mode", "build")
             status = Agent(workspace, session, config, provider, approve).run()
             return EXIT_CODES[status]
     except (OSError, ValueError, ModelError) as exc:

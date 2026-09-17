@@ -1,6 +1,6 @@
 # Open SPARKLE CODER
 
-Version **0.3.2** is a browser interface for your personal coding agent.
+Version **0.4.0** is a browser interface for your personal coding agent.
 Everyday use takes place in the browser: connect a model, select a project,
 describe work, approve commands, inspect files, and continue saved tasks.
 
@@ -81,6 +81,18 @@ project paths are saved; passwords are not. Do not put credentials in prompts
 or `nemotron.toml`. The optional terminal interface reads `NVIDIA_API_KEY`
 (or the configured `api_key_env`) from the environment before launch.
 
+## Choose how to work
+
+Use **Build · edit and verify** for implementation work. Use **Ask · inspect and
+explain** for architecture questions or reading code; that mode cannot edit
+files or run commands and does not require build checks.
+
+In **Connect Nemotron**, choose **Remove all run caps**, then **Save connection**.
+This clears model-call, elapsed-time, total-token and command-duration caps.
+Provider context/output limits and account quotas still apply. Use **Stop** to
+end a run yourself. The key's **Show** button lets you inspect what you pasted;
+**Remove configured key** clears it for this app session.
+
 ## Build something
 
 Click **+** beside the project selector. Give your project a name. Leave the
@@ -101,9 +113,21 @@ its own checks. Read their results before relying on generated software.
 
 The **Files** page previews text files. **Changes** shows file-tool diffs.
 **Run history** lets you open a task and continue it with a follow-up message.
-**Stop** cancels commands and further actions; an in-flight model request may
-finish or time out first. **Undo** restores file-tool edits after checking for
+**Stop** cancels commands and releases the run during an API request. A late
+model response cannot execute further actions. **Undo** restores file-tool edits after checking for
 later manual changes. It cannot reverse shell commands or external actions.
+
+## Recover a task without losing work
+
+Temporary API and network failures retry automatically and appear in Run monitor.
+If your key or model access needs attention, use **Connection settings**, fix the
+connection, and choose **Resume task**. For **Your input needed**, read the exact
+question or check output, enter the missing detail, and resume the saved task.
+
+Build mode continues to repair failed checks while evidence changes. If the agent
+keeps proposing completion against the same evidence, it saves the work and asks
+for help. The Checks panel retains every recorded pass and failure. Questions in
+Ask mode finish as **Answer ready** instead of waiting for software verification.
 
 ## Copy, import, download, and monitor
 
@@ -119,8 +143,8 @@ In **Project files**:
 Open **Run monitor** while a task runs. It shows the current action, elapsed
 time, model calls, plan steps, checks, operation history, and live command output.
 Runs have unlimited model calls, elapsed time, and total tokens by default. In
-**Connect Nemotron → Optional run caps**, leave the cap fields blank to keep
-that behavior or enter positive values when you want a cap. **Pause** waits until the current operation finishes before blocking the next
+**Connect Nemotron → Run and connection settings**, leave cap fields blank or
+enter positive values when you want a cap. Commands have no default deadline. **Pause** waits until the current operation finishes before blocking the next
 one. **Resume** releases it. **Stop** cancels commands and further actions.
 Use **Save report** and **Save log** to keep readable results and recorded events.
 

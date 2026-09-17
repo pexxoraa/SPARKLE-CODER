@@ -2,7 +2,9 @@
 
 import json
 import difflib
+import re
 
+from .checks import discover_checks
 from .execution import CommandRunner
 from .state import Session, now
 from .workspace import MAX_FILE_BYTES, Redactor, Workspace, WorkspaceError, write_json
@@ -17,6 +19,10 @@ def schema(name, description, properties, required=()):
 S = {"type": "string"}
 I = {"type": "integer"}
 SCHEMAS = [
+    schema("discover_checks", "Find existing test, typecheck, lint and build commands. Does not execute them.", {}),
+    schema("request_input", "Ask the user for a specific missing decision, credential setup, or unavailable dependency "
+           "only after useful work is exhausted. Include the exact next step; work will be saved.",
+           {"question": S, "next_step": S}, ["question", "next_step"]),
     schema("list_files", "List project files. Common build, dependency, secret, and state paths are excluded.",
            {"pattern": S, "limit": I}),
     schema("read_file", "Read UTF-8 lines, current full-file sha256, and applicable AGENTS.md instructions.",
@@ -83,7 +89,9 @@ class ToolSet:
         self.observe("tool_start", detail)
         try:
             self.validate(name, arguments)
-            if self.should_stop():
+            if self.session.state.get("task_mode") == "ask" and name not in READ_ONLY_TOOLS:
+                result = {"ok": False, "error": "Ask mode only allows project inspection. Switch to Build to edit files or run commands."}
+            elif self.should_stop():
                 result = {"ok": False, "cancelled": True, "error": "Stopped before this action."}
             elif self.approve_edit and name in ("write_file", "edit_file", "delete_file") and not self.approve_edit(
                     self.redactor.value(self.mutation_preview(name, arguments))):
@@ -125,6 +133,15 @@ class ToolSet:
         limit = min(1000, max(1, limit))
         files = self.workspace.files(pattern, limit + 1)
         return {"files": files[:limit], "truncated": len(files) > limit}
+
+    def discover_checks(self):
+        return discover_checks(self.workspace, self.runner.config.execution)
+
+    def request_input(self, question, next_step):
+        if not question.strip() or not next_step.strip():
+            raise ValueError("Give a specific question and a next step.")
+        self.session.state["input_request"] = {"question": question[:2000], "next_step": next_step[:2000]}
+        return {"waiting_for_user": True, "question": question, "next_step": next_step}
 
     def read_file(self, path, start_line=1, max_lines=200):
         text, digest = self.workspace.read(path)
@@ -179,9 +196,13 @@ class ToolSet:
             result = self.runner.run(command, cwd, timeout, trusted=trusted)
         except (OSError, ValueError) as exc:
             result = {"ok": False, "exit_code": None, "output": str(exc)}
+        if re.search(r"\bRan 0 tests\b", result.get("output", "")):
+            result["ok"] = False
+            result["output"] += "\nNo tests were collected. Inspect the test path and run the actual suite."
         record = {"at": now(), "command": command, "cwd": cwd, "required": trusted,
                   "exit_code": result.get("exit_code"), "ok": result["ok"],
                   "denied": result.get("denied", False),
+                  "cancelled": result.get("cancelled", False),
                   "fingerprint": self.workspace.fingerprint(),
                   "output": result.get("output", "")[-12000:]}
         self.session.state["checks"].append(self.redactor.value(record))
@@ -217,3 +238,6 @@ class ToolSet:
         memory[key] = self.redactor.value({"fact": fact, "source": source, "updated": now()})
         write_json(self.workspace.state_dir / "memory.json", memory)
         return {"saved": key}
+
+
+READ_ONLY_TOOLS = {"list_files", "read_file", "search_files", "discover_checks", "request_input", "update_plan"}

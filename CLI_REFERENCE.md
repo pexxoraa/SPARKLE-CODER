@@ -5,7 +5,7 @@ an OpenAI-compatible endpoint, edits real files, executes development commands,
 remembers project decisions, and repairs failures from actual test output.
 
 The browser interface is documented in [START_HERE.md](START_HERE.md).
-These optional commands remain available in version **0.3.2**.
+These optional commands remain available in version **0.4.0**.
 
 ## Included
 
@@ -19,10 +19,10 @@ These optional commands remain available in version **0.3.2**.
   user corrections remain in a separate checkpoint.
 - Terminal commands for installed language toolchains.
 - User-owned acceptance commands, a failed-check repair loop, and honest
-  checked/unverified/blocked states.
+  checked/answered/needs_input states and saved recovery steps.
 - Per-command approval by default; optional Docker execution.
-- Bounded command output and command timeouts. Model-call, elapsed-time, and
-  total-token caps are unlimited unless you set them explicitly.
+- Bounded command output, optional command timeouts, and cancellable API retries.
+  Model-call, elapsed-time, total-token and command-duration caps default to unlimited.
 - Conflict-aware undo for changes made through file tools.
 - An offline demonstration and automated tests.
 
@@ -174,6 +174,12 @@ sparkle-coder resume SESSION_ID -w ../app \
 # Ongoing interactive work.
 sparkle-coder chat -w ../app
 
+# Read-only questions need no build verification.
+sparkle-coder run "Explain the architecture" -w ../app --task-mode ask
+
+# An optional per-command timeout; omitted means unlimited for this invocation.
+sparkle-coder run "Fix the failing tests" -w ../app --command-timeout 600
+
 # Inspect history and verification.
 sparkle-coder sessions -w ../app
 sparkle-coder report SESSION_ID -w ../app
@@ -185,8 +191,9 @@ sparkle-coder undo SESSION_ID -w ../app
 
 Replace example test commands with commands supported by your project.
 If no required checks are configured, the agent can select checks itself.
-If it cannot establish current passing checks, its result is explicitly
-**unverified**. A passing trivial command or incomplete generated test suite
+The runtime also discovers common project checks. If repeated unchanged
+completion claims still lack passing checks, it saves the task as **needs_input**
+with a recovery step. Failed evidence is retained. A passing trivial command or incomplete generated test suite
 does not prove a requirement; meaningful user-owned checks are preferable.
 
 User-configured `--verify` commands are authorized by the user and run without

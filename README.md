@@ -4,11 +4,27 @@ A local browser app for your personal NVIDIA Nemotron coding agent.
 Chat with the agent, select projects, approve commands, inspect file changes,
 review checks, and resume saved tasks without using a terminal interface.
 
-Version **0.3.2**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
+Version **0.4.0**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
 Python **3.11+** is required once; there are no third-party runtime packages.
 Launchers are included for Windows, macOS, and Linux.
 
-## SPARKLE CODER 0.3.2
+## Reliability update in 0.4.0
+
+- Repairs continue while the project or check evidence changes; the old two/three
+  completion-attempt cutoff is removed. Unchanged unsuccessful completion claims
+  produce a saved task with a specific recovery step, never a fabricated pass.
+- Existing Node, Python unittest/pytest, Rust and Go checks can be discovered and
+  run with normal approval. The model can use other language tools directly.
+- Temporary timeouts, network errors, rate limits and server failures retry with
+  visible progress. Stop also releases the run during a slow API response.
+- Build mode edits and verifies software. Ask mode inspects files and answers
+  project questions; commands and file mutations are disabled in that mode.
+- Connection settings provide key visibility, key removal, configurable API
+  timeouts, and **Remove all run caps**. Saving a tested connection keeps its status.
+- Large tool results are shortened in the model context while full history stays
+  saved. Large projects no longer lose check freshness at a fixed size cutoff.
+
+## SPARKLE CODER
 
 The application is now named **SPARKLE CODER**. NVIDIA Nemotron remains the
 model family used for inference. The Python package is `sparkle_coder`;
@@ -63,10 +79,13 @@ in the running app process and is cleared when you quit; it is never written to
 `api_key_env`).
 
 SPARKLE CODER does not stop a run after a fixed number of model calls, seconds,
-or total tokens. Leave the three **Optional run caps** fields blank for this
-behavior. A positive value restores that cap for the saved endpoint settings.
-The per-response output limit and command timeout are separate transport
-safeguards; **Stop** remains the way to end an active run.
+or total tokens. Commands also have no default deadline. Click **Remove all run
+caps**, then **Save connection**, to clear any caps from an older installation.
+You can set optional positive caps under **Run and connection settings**. The
+agent may choose a timeout for an individual diagnostic command.
+The model endpoint still enforces its output/context size, rate limits and
+account quota. These provider limits cannot be removed by the app. **Stop** ends
+the local run; an already submitted model request may still finish at the provider.
 
 ## Agent capabilities
 
@@ -76,10 +95,19 @@ function calls and an explicit JSON fallback support compatible model servers.
 Context trimming preserves whole tool exchanges and recent user corrections.
 Interrupted actions are marked uncertain instead of automatically replayed.
 
-Required acceptance commands rerun when the model proposes completion. Failing
-checks send their actual output back for repair. Results distinguish checked,
-unverified, blocked, paused, and stopped tasks. Passing checks establish only
-what those checks cover, not universal correctness.
+Required acceptance commands run when the model proposes completion. Unchanged
+results are reused within that run to avoid repeatedly executing the same check;
+file changes and environment commands invalidate the relevant cache. Failing
+checks send actual output back for repair. Without required commands, the runtime
+uses recorded checks and discovers common project checks. Zero-test unittest
+runs do not count as passing verification.
+
+Results distinguish **Checks passed**, **Answer ready**, **Your input needed**,
+paused and stopped tasks. A specific missing decision or an unrecoverable
+connection error provides a recovery action. Repeated completion claims against
+the same failing evidence ask for help; they never erase failures or pretend the
+build was verified. Use **Resume task** after correcting the problem. Passing
+checks establish only what those checks cover, not universal correctness.
 
 The default is `nvidia/nemotron-3-super-120b-a12b` at
 `https://integrate.api.nvidia.com/v1`. Change the model ID in settings to an ID
@@ -117,7 +145,7 @@ The Run monitor displays actual operations and emitted command output. It does
 not display private model reasoning. Some programs buffer their output; the
 current action and elapsed time remain visible during those waits. Pause takes
 effect before the next action, after the current operation finishes. Stop
-cancels commands and prevents further actions after an in-flight model request.
+cancels commands and releases the run during a model request; a late response cannot execute actions.
 
 File-edit approval reviews changes made through the agent's file tools.
 Approved shell commands can also modify files; inspect those commands before
@@ -174,8 +202,8 @@ and macOS launchers are included but were not executed on those operating
 systems. This is a source app with desktop launchers, not a signed standalone
 installer or a mobile app.
 
-For contributors, run `python3 -m unittest discover -s tests -v` and
-`node --check sparkle_coder/ui/app.js`. The optional terminal interface
+For contributors, run `python3 -m unittest discover -s tests -v`,
+`node tests/test_ui_client.js`, and `node --check sparkle_coder/ui/app.js`. The optional terminal interface
 remains available in [CLI_REFERENCE.md](CLI_REFERENCE.md).
 
 ## Source map
@@ -193,6 +221,7 @@ remains available in [CLI_REFERENCE.md](CLI_REFERENCE.md).
 | sparkle_coder/agent.py | Model/tool loop, context, acceptance checks, reports |
 | sparkle_coder/provider.py | Model API transport and native/JSON tools |
 | sparkle_coder/tools.py | Model-facing project tools and memory |
+| sparkle_coder/checks.py | Read-only discovery of common project checks |
 | sparkle_coder/workspace.py | File boundaries, hashes, atomic writes, locking |
 | sparkle_coder/execution.py | Command execution, cancellation, limits, Docker option |
 | sparkle_coder/state.py | Sessions, file journal, recovery, undo |

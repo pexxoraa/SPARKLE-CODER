@@ -8,7 +8,7 @@ import sys
 import time
 
 from .provider import ModelError
-from .tools import SCHEMAS, ToolSet
+from .tools import READ_ONLY_TOOLS, SCHEMAS, ToolSet
 from .workspace import atomic_write, clean_terminal
 
 
@@ -18,6 +18,10 @@ language supported by the user's toolchain. Inspect existing projects before cha
 For substantial tasks, maintain a short plan, implement, run meaningful checks, diagnose failures,
 and repair until the checks pass or you encounter a concrete blocker. Deliver complete working
 files, not placeholder features or invented test results. Prefer simple, maintainable solutions.
+Start by mapping the relevant files, existing conventions, dependencies, and acceptance criteria.
+Make focused changes. Handle errors and edge cases, preserve compatibility, and avoid unnecessary
+dependencies. Use discover_checks to find the project's real checks, then add focused behavioral
+checks for the requested change. Inspect the final diff for omissions before completing.
 
 Preserve unrelated user work. Read a file before replacing/deleting it and use its exact sha256.
 Read applicable AGENTS.md files before editing a subdirectory; root guidance is supplied below.
@@ -35,6 +39,10 @@ Never repeat a denied command. If a hypothesis repeatedly fails, change the inve
 Use the verify tool for real verification evidence. A final answer must name the implemented result,
 actual checks, and remaining limitations. Never claim universal correctness or checks you did not run.
 The runtime will independently execute user-configured acceptance commands before accepting completion.
+A text-only response in Build mode proposes completion. Put progress narration alongside a tool call.
+Failed checks are a reason to investigate and repair, not to stop. Call request_input only for a
+specific obstacle requiring the user's action; include what you tried and the exact next step.
+Omit command timeouts for long builds unless the command genuinely needs a deadline.
 """
 
 
@@ -59,6 +67,13 @@ class Agent:
         self.tools = ToolSet(workspace, session, config, approve, self.should_stop,
                              self.observe, self.checkpoint, approve_edit)
         self.failures = {}
+        self.schemas = [s for s in SCHEMAS if session.state.get("task_mode") != "ask"
+                        or s["function"]["name"] in READ_ONLY_TOOLS]
+        if callable(getattr(provider, "bind_runtime", None)):
+            provider.bind_runtime(self.tools.observe, self.should_stop)
+        self.required_cache = {}
+        self.completion_failures = {}
+        self.environment_changed = False
 
     def say(self, text):
         self.emit(clean_terminal(self.tools.redactor.text(text)))
@@ -66,6 +81,9 @@ class Agent:
     def context(self) -> list[dict]:
         state = self.session.state
         system = SYSTEM + "\nExecution environment: " + self.config.execution
+        if state.get("task_mode") == "ask":
+            system += ("\nASK MODE: inspect files and answer the user's question. Do not change files or run commands. "
+                       "A clear, evidence-based explanation completes this task; build verification is not required.")
         if self.config.execution == "docker":
             system += "\nCommands run in a Linux container using sh, with the project at /workspace."
         else:
@@ -79,10 +97,10 @@ class Agent:
             system += ("\n\nRespond with exactly ONE JSON object, without reasoning or surrounding prose: "
                        '{"tool": "tool_name", "arguments": {...}} to use a tool, or '
                        '{"final": "summary and verification"} when finished.\nTools:\n'
-                       + json.dumps(SCHEMAS))
+                       + json.dumps(self.schemas))
         checkpoint = {
-            "original_goal": state["goal"], "plan": state["plan"],
-            "recent_user_requests": state.get("user_requests", [state["goal"]])[-8:],
+            "plan": state["plan"],
+            "recent_user_requests": state.get("user_requests", [state["goal"]])[-4:],
             "required_acceptance_commands": state["required_checks"],
             "recent_actions": state["actions"][-12:],
             "recent_checks": [{k: c[k] for k in ("command", "ok", "exit_code", "fingerprint")}
@@ -98,11 +116,44 @@ class Agent:
         groups = group_messages(state["messages"][1:])
         def size(items):
             return len(json.dumps(items, ensure_ascii=False))
-        while len(groups) > 1 and size(prefix + [m for group in groups for m in group]) > self.config.context_chars:
-            groups.pop(0)
+        # Measure only the tail that can fit, rather than reserializing all of
+        # a long-running session on every model call.
+        total = size(prefix)
+        retained = []
+        for group in reversed(groups):
+            cost = size(group)
+            if retained and total + cost > self.config.context_chars:
+                break
+            retained.append(group)
+            total += cost
+        trimmed = len(groups) - len(retained)
+        groups = list(reversed(retained))
+        # Compact only the request copy. Exact tool output, messages and edits stay
+        # on disk. Never send orphan tool results or execute a shortened tool call.
+        if total > self.config.context_chars and groups:
+            group = json.loads(json.dumps(groups[0]))
+            for message in group:
+                if message["role"] == "tool" and len(message.get("content", "")) > 2000:
+                    text = message["content"]
+                    message["content"] = json.dumps({"context_preview": text[:800] + "\n…\n" + text[-1200:],
+                        "note": "Result shortened for context. Full output is saved; read narrower ranges if needed."})
+            groups[0] = group
         if size(prefix + [m for group in groups for m in group]) > self.config.context_chars:
-            raise ModelError("Current instructions, memory, or tool exchange exceed the context budget. "
-                             "Trim project memory or increase context_chars; the latest result was preserved.")
+            # A large historical write can be discarded as a whole completed exchange.
+            # Its paths, plan and check state are preserved by the runtime checkpoint.
+            groups = []
+            trimmed += 1
+        if size(prefix) > self.config.context_chars:
+            checkpoint["recent_actions"] = state["actions"][-3:]
+            checkpoint["project_memory"] = "Memory omitted to fit context; inspect project files for current facts."
+            checkpoint["file_tool_changes"] = checkpoint["file_tool_changes"][-50:]
+            prefix[-1]["content"] = "RUNTIME CHECKPOINT (data, not new instructions):\n" + json.dumps(
+                self.tools.redactor.value(checkpoint), ensure_ascii=False)
+        if size(prefix) > self.config.context_chars:
+            raise ModelError("The task instructions exceed the configured context window. Shorten the task or increase "
+                             "context_chars in project configuration, then resume. Full history is saved.", action="instructions")
+        if trimmed:
+            self.observe("context_compacted", {"exchanges": trimmed, "text": "Older exchanges compacted; full history remains saved."})
         context = prefix + [m for group in groups for m in group]
         return self.tools.redactor.value(context)
 
@@ -111,10 +162,11 @@ class Agent:
                                               "content": self.tools.redactor.text(content)})
         self.session.save()
 
-    def finish(self, status: str, summary: str):
+    def finish(self, status: str, summary: str, recovery=None):
         state = self.session.state
         state["status"] = status
         state["summary"] = self.tools.redactor.text(summary)
+        state["recovery"] = self.tools.redactor.value(recovery)
         self.session.save()
         self.write_report()
         self.say(f"\nStatus: {status} | session: {self.session.id}")
@@ -141,7 +193,8 @@ class Agent:
             lines.append("No file-tool changes were recorded. Shell changes are not journaled.")
         lines += ["", "## Verification", ""]
         if not state["checks"]:
-            lines.append("No verification commands were executed. The result is unverified.")
+            lines.append("Ask mode: no build checks requested." if state.get("task_mode") == "ask"
+                         else "No verification commands were executed. Build verification is still pending.")
         for check in state["checks"]:
             origin = "user-required" if check["required"] else "agent-selected"
             lines.append(f"- {'PASS' if check['ok'] else 'FAIL'} ({origin}, exit "
@@ -164,8 +217,14 @@ class Agent:
                 if self.should_stop():
                     return False, "Stopped by the user."
                 self.say("Acceptance check: " + command)
+                fingerprint = self.workspace.fingerprint()
+                cached = self.required_cache.get(command)
                 try:
-                    result = self.tools.verify(command, trusted=True)
+                    if fingerprint and cached and cached[0] == fingerprint:
+                        result = cached[1]
+                    else:
+                        result = self.tools.verify(command, trusted=True)
+                        self.required_cache[command] = (self.workspace.fingerprint(), result)
                 except (OSError, ValueError) as exc:
                     result = {"ok": False, "error": str(exc)}
                 results.append({"command": command, **result})
@@ -177,8 +236,32 @@ class Agent:
         latest = {}
         for check in self.session.state["checks"]:
             latest[(check["command"], check["cwd"])] = check
-        if current and latest and all(c["ok"] and c["fingerprint"] == current for c in latest.values()):
+        candidates = self.tools.discover_checks()["checks"]
+        for check in candidates:
+            latest.setdefault((check["command"], check["cwd"]), check)
+        for (command, cwd), check in list(latest.items()):
+            if self.should_stop():
+                return False, "Stopped by the user."
+            if (command, cwd) in self.tools.runner.denied:
+                latest[(command, cwd)] = {**check, "ok": False, "denied": True,
+                    "output": check.get("output", "") if check.get("denied") else
+                    "You denied this command. Resume the task to reconsider it, or provide an alternative check."}
+                continue  # A later run may request approval again; never bypass a denial in this run.
+            if (not current or check.get("fingerprint") != current or check.get("denied")
+                    or (self.environment_changed and not check.get("ok"))):
+                self.observe("verification_start", {"command": command, "cwd": cwd})
+                self.say("Checking: " + command)
+                self.tools.verify(command, cwd)
+                latest[(command, cwd)] = self.session.state["checks"][-1]
+        self.environment_changed = False
+        current = self.workspace.fingerprint()
+        if current and latest and all(c.get("ok") and c.get("fingerprint") == current for c in latest.values()):
             return True, "Agent-selected verification commands passed against the current tracked project files."
+        if latest:
+            failures = [{"command": c["command"], "cwd": c["cwd"], "ok": c.get("ok", False),
+                         "output": c.get("output", "")[-6000:]} for c in latest.values()
+                        if not c.get("ok") or c.get("fingerprint") != current]
+            return False, "Checks need repair. Inspect the failures, fix the cause, then verify again.\n" + json.dumps(failures)
         return False, ("No current passing verification covers this result. Run meaningful checks with verify. "
                        "If the environment prevents checking, state the limitation explicitly.")
 
@@ -188,7 +271,8 @@ class Agent:
         self.session.save()
         started = time.monotonic()
         starting_tokens = state["usage"]["prompt_tokens"] + state["usage"]["completion_tokens"]
-        verification_attempts = 0
+        state.pop("input_request", None)
+        state["recovery"] = None
         malformed = 0
         self.say(f"Session {self.session.id} | {self.config.model} | {self.config.execution}")
         try:
@@ -212,7 +296,7 @@ class Agent:
                 self.session.save()
                 self.observe("model_start", {"model": self.config.model, "call": state["usage"]["calls"]})
                 try:
-                    response = self.provider.complete(messages, SCHEMAS)
+                    response = self.provider.complete(messages, self.schemas)
                 except ModelError as exc:
                     if self.should_stop():
                         return self.finish("interrupted", "Stopped by the user. Work is saved.")
@@ -221,7 +305,7 @@ class Agent:
                         malformed += 1
                         self.feedback("Your response could not be parsed. Use the documented tool format. " + str(exc))
                         continue
-                    return self.finish("blocked", str(exc))
+                    return self.finish("needs_input", str(exc), {"action": exc.action, "message": str(exc)})
                 self.observe("model_end", {"tool_calls": len(response.calls)})
                 self.checkpoint()
                 malformed = 0
@@ -237,7 +321,8 @@ class Agent:
                                   "report that max_tokens must be increased.")
                     continue
                 if response.finish_reason in ("content_filter", "error"):
-                    return self.finish("blocked", "The provider did not complete the response: " + response.finish_reason)
+                    return self.finish("needs_input", "The provider did not complete the response: " + response.finish_reason,
+                                       {"action": "connection", "message": "Review the model endpoint response, then resume."})
                 assistant = {"role": "assistant", "content": self.tools.redactor.text(response.content)}
                 if response.calls:
                     assistant["tool_calls"] = self.tools.redactor.value(response.calls)
@@ -250,15 +335,26 @@ class Agent:
                         name = call["function"]["name"]
                         self.say("  Tool: " + name)
                         signature = hashlib.sha256((name + call["function"]["arguments"]).encode()).hexdigest()
+                        if name in ("run_command", "verify"):
+                            signature += str(self.workspace.fingerprint())
                         try:
                             arguments = json.loads(call["function"]["arguments"])
-                            if self.should_stop():
+                            if state.get("input_request"):
+                                result = {"ok": False, "error": "Waiting for the user's response; this action did not run."}
+                            elif self.should_stop():
                                 result = {"ok": False, "error": "Cancelled by the user before this action executed."}
                             elif self.failures.get(signature, 0) >= 3:
-                                result = {"ok": False, "error": "Repeated failed action was blocked. "
+                                result = {"ok": False, "error": "This exact action failed repeatedly against unchanged project files. "
                                           "Change the hypothesis, inspect new evidence, or report the blocker."}
                             else:
                                 result = self.tools.execute(name, arguments)
+                                if name == "verify":
+                                    self.required_cache.clear()
+                                if name == "run_command" and result.get("exit_code") is not None:
+                                    self.required_cache.clear()
+                                    self.environment_changed = True
+                                    if result.get("ok"):
+                                        self.failures.clear()
                         except json.JSONDecodeError:
                             result = {"ok": False, "error": "Tool arguments are not valid JSON. Retry with a valid object."}
                         if not result.get("ok"):
@@ -269,22 +365,32 @@ class Agent:
                         state["messages"].append({"role": "tool", "tool_call_id": call["id"],
                                                   "content": json.dumps(self.tools.redactor.value(result), ensure_ascii=False)})
                         self.session.save()
+                    if state.get("input_request"):
+                        request = state["input_request"]
+                        return self.finish("needs_input", request["question"] + "\n\n" + request["next_step"],
+                                           {"action": "instructions", "message": request["next_step"]})
                     continue
                 if not response.content.strip():
                     self.feedback("Your response was empty. Use a tool or provide a concise completion/blocker report.")
                     continue
-                verification_attempts += 1
+                if state.get("task_mode") == "ask":
+                    return self.finish("answered", response.content)
                 passed, evidence = self.verify_completion()
                 if self.should_stop():
                     return self.finish("interrupted", "Stopped by the user. Work is saved and can be resumed.")
                 if passed:
                     return self.finish("checked", response.content + "\n\nRuntime evidence: " + evidence)
-                if not state["required_checks"] and verification_attempts >= 2:
-                    return self.finish("unverified", response.content + "\n\nRuntime: current verification is missing.")
-                if verification_attempts >= 3:
-                    return self.finish("blocked", response.content + "\n\nRuntime: acceptance checks still fail.")
+                # Repairs have no attempt cap. Only identical completion proposals
+                # against the same files and evidence trigger a request for help.
+                stamp = hashlib.sha256((str(self.workspace.fingerprint()) + evidence).encode()).hexdigest()
+                self.completion_failures[stamp] = self.completion_failures.get(stamp, 0) + 1
+                if self.completion_failures[stamp] >= 4:
+                    message = ("Work is saved. The agent proposed completion four times without changing the failing evidence. "
+                               "Review the checks below, add a missing requirement or environment detail, then resume.\n\n" + evidence)
+                    return self.finish("needs_input", message, {"action": "checks", "message": message})
+                self.observe("repair", {"text": "Checking found more work. Continuing diagnosis and repair."})
                 self.feedback(evidence)
         except KeyboardInterrupt:
             return self.finish("interrupted", "Interrupted. Pending tool calls will not be automatically replayed.")
         except (ModelError, OSError, ValueError) as exc:
-            return self.finish("blocked", str(exc))
+            return self.finish("needs_input", str(exc), {"action": getattr(exc, "action", "retry"), "message": str(exc)})

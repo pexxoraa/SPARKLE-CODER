@@ -183,14 +183,14 @@ class ImprovementTests(unittest.TestCase):
         self.assertIn('+real write', waiting['approval']['diff'])
         self.assertNotIn('new.txt', self.api(self.prefix() + '/files')['files'])
         self.api('/api/runs/' + run['id'] + '/approval', {'approval_id': waiting['approval']['id'], 'allow': True})
-        self.await_run(run['id'], {'unverified'})
+        self.await_run(run['id'], {'needs_input'})
         self.assertEqual(self.api(self.prefix() + '/file?path=new.txt')['content'], 'real write\n')
 
     def test_denied_file_edit_does_not_mutate_project(self):
         run = self.start_controlled(review=True)
         waiting = self.await_run(run['id'], {'approval'})
         self.api('/api/runs/' + run['id'] + '/approval', {'approval_id': waiting['approval']['id'], 'allow': False})
-        finished = self.await_run(run['id'], {'unverified'})
+        finished = self.await_run(run['id'], {'needs_input'})
         self.assertFalse(self.api(self.prefix() + '/files')['files'])
         self.assertFalse(finished['session']['actions'][0]['ok'])
 
@@ -204,7 +204,7 @@ class ImprovementTests(unittest.TestCase):
             self.assertTrue(paused['pause_requested'])
             self.assertNotIn('new.txt', self.api(self.prefix() + '/files')['files'])
             self.api('/api/runs/' + run['id'] + '/resume', {})
-            self.await_run(run['id'], {'unverified'})
+            self.await_run(run['id'], {'needs_input'})
             self.assertIn('new.txt', self.api(self.prefix() + '/files')['files'])
         finally:
             gate.set()

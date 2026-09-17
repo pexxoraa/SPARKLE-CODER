@@ -52,6 +52,12 @@ class Run:
                 event["text"] = clean_terminal(event["text"])
             if kind == "model_start":
                 self.current_action = "Waiting for Nemotron response"
+            elif kind == "model_retry":
+                self.current_action = f"Reconnecting in {data['delay']}s · attempt {data['attempt']} · {data['reason']}"
+            elif kind == "verification_start":
+                self.current_action = "Checking: " + data["command"]
+            elif kind == "repair":
+                self.current_action = "Diagnosing check failures and continuing repairs"
             elif kind == "tool_start":
                 self.current_action = data.get("tool", "Tool") + ": " + str(data.get("path") or data.get("command") or "project")
             elif kind == "command_start":
@@ -159,7 +165,8 @@ class Run:
         with self.lock:
             self.status = status
             self.finished = time.monotonic()
-            self.current_action = "Task finished: " + status
+            self.current_action = {"needs_input": "Work saved · ready for your next step", "answered": "Answer ready",
+                                   "checked": "Checks passed", "interrupted": "Stopped · work saved"}.get(status, "Task finished: " + status)
             self.record("finished", {"text": self.current_action, "status": status, "summary": summary[:4000]})
 
     def public(self, after=0):

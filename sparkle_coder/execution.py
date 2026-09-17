@@ -30,6 +30,7 @@ class CommandRunner:
         self.should_stop = should_stop or (lambda: False)
         self.observe = observe or (lambda *_: None)
         self.checkpoint = checkpoint or (lambda: None)
+        self.denied = set()
 
     def run(self, command: str, cwd: str = ".", timeout: int | None = None,
             *, trusted: bool = False) -> dict:
@@ -38,11 +39,16 @@ class CommandRunner:
         path = self.workspace.path(cwd, directory=True)
         if not path.exists():
             raise ValueError("Command working directory does not exist.")
-        timeout = min(timeout or self.config.command_timeout, self.config.command_timeout)
-        if type(timeout) is not int or timeout < 1:
-            raise ValueError("Command timeout must be positive.")
+        if timeout is not None and (type(timeout) is not int or timeout < 1):
+            raise ValueError("Command timeout must be a positive integer or omitted.")
+        caps = [value for value in (timeout, self.config.command_timeout) if value is not None]
+        timeout = min(caps) if caps else None
         self.checkpoint()
+        if (command, cwd) in self.denied:
+            return {"ok": False, "exit_code": None, "denied": True,
+                    "output": "You denied this command in this run. It will not be requested again until you resume."}
         if not trusted and not self.config.auto_approve and not self.approve(command):
+            self.denied.add((command, cwd))
             return {"ok": False, "exit_code": None, "denied": True,
                     "output": "Command was not approved. Do not repeat it; report the limitation."}
         if self.should_stop():
@@ -118,14 +124,14 @@ class CommandRunner:
             reader = threading.Thread(target=consume, daemon=True)
             reader.start()
             while process.poll() is None:
-                if self.should_stop() or time.monotonic() - started >= timeout:
+                if self.should_stop() or (timeout is not None and time.monotonic() - started >= timeout):
                     cancelled = bool(self.should_stop())
                     timed_out = not cancelled
                     kill()
                     process.wait(timeout=5)
                     break
                 try:
-                    process.wait(timeout=min(0.2, max(0.01, timeout - (time.monotonic() - started))))
+                    process.wait(timeout=0.2)
                 except subprocess.TimeoutExpired:
                     continue
             reader.join(timeout=2)
@@ -139,6 +145,8 @@ class CommandRunner:
             text = bytes(output).decode("utf-8", errors="replace")
             if total[0] > len(output):
                 text = "[Output truncated; showing the final 48000 bytes.]\n" + text
+            if timed_out:
+                text += f"\nCommand exceeded its configured {timeout}s timeout. Increase the timeout or leave it blank in settings."
             result = {"ok": process.returncode == 0 and not timed_out and not cancelled,
                     "exit_code": process.returncode, "timed_out": timed_out,
                     "cancelled": cancelled,

@@ -1,3 +1,3 @@
 """Personal coding agent for Nemotron. No third-party runtime dependencies."""
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
