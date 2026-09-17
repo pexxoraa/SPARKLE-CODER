@@ -1,8 +1,8 @@
-# Validation report — SPARKLE CODER 0.3.1
+# Validation report — SPARKLE CODER 0.3.2
 
 Validated on Linux with Python 3.12.14.
 
-**69 automated tests passed. Zero failures, zero errors, zero skipped tests.**
+**72 automated tests passed. Zero failures, zero errors, zero skipped tests.**
 The complete final output is in TEST_RESULTS.txt. Responses from model providers
 in these tests were scripted; no live Nemotron generation was performed.
 
@@ -12,6 +12,10 @@ Two additional tests verify that the new SPARKLE CODER storage path is used for
 new installations, while existing settings, storage pointers, projects, and
 history remain discoverable in the previous Nemotron Workspace location.
 Existing SPARKLE CODER settings take precedence when both installations exist.
+
+Three run-loop tests verify that model-call, elapsed-time, and total-token caps
+are optional, unlimited by default, and still enforce a positive cap when one is
+explicitly configured. The browser settings accept blank values as unlimited.
 
 ## New file, supervision, and storage behaviors exercised
 
@@ -76,7 +80,7 @@ Sixteen additional behavioral tests passed:
   without blindly replaying actions that may already have run.
 - Context trimming without orphaned tool messages, recent user corrections,
   stale verification rejection, failed-check gates, unverified results, and
-  resumable model-call limits.
+  resumable optional run caps.
 
 ## Build and source checks
 
@@ -85,7 +89,7 @@ Sixteen additional behavioral tests passed:
 - Python files parsed successfully. Unix launcher shell syntax passed; macOS
   Info.plist parsed and references its supplied executable.
 - The package built and installed into an isolated target without downloading
-  dependencies. Version 0.3.1, all four UI assets, and the graphical entry point
+  dependencies. Version 0.3.2, all four UI assets, and the graphical entry point
   were present in the installed package.
 - Repository checks confirm that the source includes UI assets, launchers,
   setup guides, tests, and recorded results, excluding temporary application

@@ -40,8 +40,10 @@ def add_runtime(parser):
     parser.add_argument("--execution", choices=("local", "docker"))
     parser.add_argument("--auto-approve", action="store_true", default=None,
                         help="Approve all model-generated shell commands for this invocation")
-    parser.add_argument("--max-steps", type=int, help="Maximum model calls in this invocation")
-    parser.add_argument("--max-seconds", type=int)
+    parser.add_argument("--max-steps", type=int, help="Optional model-call cap; omit for unlimited")
+    parser.add_argument("--max-seconds", type=int, help="Optional elapsed-time cap; omit for unlimited")
+    parser.add_argument("--max-total-tokens", type=int,
+                        help="Optional total token cap; omit for unlimited")
     parser.add_argument("--max-tokens", type=int, help="Maximum output tokens per model response")
 
 
@@ -87,7 +89,7 @@ def parser():
 
 def runtime_config(args, workspace):
     names = ("model", "base_url", "tool_format", "execution", "auto_approve",
-             "max_steps", "max_seconds", "max_tokens")
+             "max_steps", "max_seconds", "max_total_tokens", "max_tokens")
     return load_config(workspace.root, {name: getattr(args, name, None) for name in names})
 
 

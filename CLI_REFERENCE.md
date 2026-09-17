@@ -5,7 +5,7 @@ an OpenAI-compatible endpoint, edits real files, executes development commands,
 remembers project decisions, and repairs failures from actual test output.
 
 The browser interface is documented in [START_HERE.md](START_HERE.md).
-These optional commands remain available in version **0.3.1**.
+These optional commands remain available in version **0.3.2**.
 
 ## Included
 
@@ -21,7 +21,8 @@ These optional commands remain available in version **0.3.1**.
 - User-owned acceptance commands, a failed-check repair loop, and honest
   checked/unverified/blocked states.
 - Per-command approval by default; optional Docker execution.
-- Bounded command output, command timeouts, per-run model-call and token budgets.
+- Bounded command output and command timeouts. Model-call, elapsed-time, and
+  total-token caps are unlimited unless you set them explicitly.
 - Conflict-aware undo for changes made through file tools.
 - An offline demonstration and automated tests.
 
@@ -76,13 +77,29 @@ Default endpoint: `https://integrate.api.nvidia.com/v1`.
 Default model: `nvidia/nemotron-3-super-120b-a12b`.
 
 The hosted route runs the model remotely; the agent does not need a local GPU.
-Provide the key through `NVIDIA_API_KEY` and create project configuration:
+Provide the key through the `NVIDIA_API_KEY` environment variable and create
+project configuration. Never put the key in `nemotron.toml` or commit it:
 
 ```bash
 python3 -m sparkle_coder init --workspace ../my-app
 python3 -m sparkle_coder doctor --workspace ../my-app --connect
 python3 -m sparkle_coder models --workspace ../my-app
 ```
+
+Set the environment variable before launching. On macOS/Linux:
+
+```bash
+export NVIDIA_API_KEY="paste-your-key-here"
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:NVIDIA_API_KEY = "paste-your-key-here"
+```
+
+The browser launcher also accepts the key in **Connect Nemotron → API key**;
+it keeps that value in memory only and clears it when the app quits.
 
 Use the exact model ID returned by your endpoint. These are documented family
 members; availability and access must be checked against your account:
@@ -102,6 +119,12 @@ The Super default follows NVIDIA's documented sampling settings and includes
 If responses repeatedly exhaust it, raise `max_tokens` within the endpoint's
 supported limits or configure the model's documented reasoning options.
 Other models/servers may need different settings.
+
+Runs have no default model-call, elapsed-time, or total-token cap. Use
+`--max-steps`, `--max-seconds`, or `--max-total-tokens` when you want an
+explicit cap for a CLI invocation. The browser has the same optional fields;
+leave them blank for unlimited runs. `--max-tokens` remains the per-response
+output limit required by the model API.
 
 ## Fully local inference
 
@@ -229,8 +252,8 @@ environment because Docker is unavailable there.
   changes, deployments, and external side effects require separate recovery.
 - A crashed process can leave `.nemotron/workspace.lock`. Check its recorded PID
   and remove the lock only after confirming that the process has stopped.
-- Output/token/time limits bound work but are not a hard billing guarantee:
-  in-flight requests, retries, and estimated token usage can exceed a run limit.
+- Optional run caps bound work when configured, but are not a hard billing
+  guarantee: in-flight requests, retries, and estimated token usage can exceed a cap.
 - Only foreground commands are supported. Browser/integration test scripts must
   start and stop their own development servers.
 - Files over 1 MB are not read through the text tool; one file-tool write is

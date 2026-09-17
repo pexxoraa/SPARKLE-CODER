@@ -38,8 +38,10 @@ def default_app_dir() -> Path:
     return current
 
 
-SETTINGS = ("base_url", "model", "tool_format", "execution", "max_steps", "max_tokens",
-            "request_timeout", "command_timeout")
+SETTINGS = ("base_url", "model", "tool_format", "execution", "max_steps", "max_seconds",
+            "max_total_tokens", "max_tokens", "request_timeout", "command_timeout")
+SETTINGS_SCHEMA_VERSION = 2
+LEGACY_RUN_CAPS = {"max_steps": 40, "max_seconds": 1800, "max_total_tokens": 250000}
 
 
 class BrowserDemo:
@@ -67,17 +69,27 @@ class AppService:
         if self.settings_path.is_symlink():
             raise ValueError("Application settings must not be a symlink.")
         defaults = {key: getattr(Config(), key) for key in SETTINGS}
-        self.data = {"settings": defaults, "projects": [], "selected_project": None}
+        self.data = {"settings": defaults, "projects": [], "selected_project": None,
+                     "settings_version": SETTINGS_SCHEMA_VERSION}
+        migrated = False
         if self.settings_path.exists():
             saved = json.loads(self.settings_path.read_text("utf-8"))
             self.data["settings"].update({k: v for k, v in saved.get("settings", {}).items() if k in SETTINGS})
             self.data["projects"] = saved.get("projects", [])
             self.data["selected_project"] = saved.get("selected_project")
+            saved_version = saved.get("settings_version", 1)
+            if type(saved_version) is not int or saved_version < SETTINGS_SCHEMA_VERSION:
+                for key, legacy_value in LEGACY_RUN_CAPS.items():
+                    if self.data["settings"].get(key) == legacy_value:
+                        self.data["settings"][key] = None
+                        migrated = True
         self.lock = threading.RLock()
         self.keys = {}
         self.connected_endpoint = None
         self.jobs = {}
         self.provider_factory = provider_factory
+        if migrated:
+            self.save()
         if not self.data["projects"]:
             self.add_project("My project", str(self.directory / "Projects" / "my-project"))
 

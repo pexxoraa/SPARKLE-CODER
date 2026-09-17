@@ -139,12 +139,23 @@ class WebTests(unittest.TestCase):
 
     def test_invalid_settings_do_not_replace_working_configuration(self):
         before = self.app.settings_path.read_bytes()
-        for payload in ({"max_steps": 0}, {"max_steps": True},
+        for payload in ({"max_steps": -1}, {"max_steps": True}, {"max_seconds": -1},
+                        {"max_total_tokens": -1},
                         {"base_url": "http://remote.example/v1"},
                         {"auto_approve": True}, {"api_key": "key\nInjected: header"}):
             self.assertEqual(self.request("/api/settings", payload)[0], 400)
         self.assertEqual(self.app.settings_path.read_bytes(), before)
         self.assertEqual(self.request("/api/settings", {}, headers={"Content-Type": "text/plain"})[0], 415)
+
+    def test_run_caps_are_unlimited_when_blank(self):
+        settings = self.api("/api/settings", {
+            "max_steps": None, "max_seconds": None, "max_total_tokens": None})
+        self.assertIsNone(settings["max_steps"])
+        self.assertIsNone(settings["max_seconds"])
+        self.assertIsNone(settings["max_total_tokens"])
+        self.assertIsNone(self.app.config().max_steps)
+        self.assertIsNone(self.app.config().max_seconds)
+        self.assertIsNone(self.app.config().max_total_tokens)
 
     def test_demo_approval_real_repair_history_diff_and_undo_through_http(self):
         data, run = self.finish_demo()
@@ -297,7 +308,7 @@ class LauncherTests(unittest.TestCase):
                     connection.request("GET", "/api/state", headers={"X-Sparkle-Token": info["token"]})
                     response = connection.getresponse()
                     self.assertEqual(response.status, 200)
-                    self.assertEqual(json.loads(response.read())["version"], "0.3.1")
+                    self.assertEqual(json.loads(response.read())["version"], "0.3.2")
                     connection.request("POST", "/api/quit", body="{}", headers={
                         "X-Sparkle-Token": info["token"], "Content-Type": "application/json"})
                     response = connection.getresponse()

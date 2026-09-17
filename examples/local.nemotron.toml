@@ -8,9 +8,10 @@ temperature = 1.0
 top_p = 0.95
 max_tokens = 16000
 context_chars = 120000
-max_steps = 40
-max_seconds = 1800
-max_total_tokens = 250000
+# Omit run caps for unlimited model calls, elapsed time, and total tokens.
+# max_steps = 40
+# max_seconds = 1800
+# max_total_tokens = 250000
 request_timeout = 180
 command_timeout = 120
 execution = "local"

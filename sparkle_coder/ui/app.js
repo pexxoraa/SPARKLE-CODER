@@ -127,9 +127,11 @@ id("app").innerHTML = `
     <label for="connectionType">Connection</label><select id="connectionType"><option value="nvidia">NVIDIA API</option><option value="local">Local or custom server</option></select>
     <label for="baseUrl">API base URL</label><input id="baseUrl" type="url" required autocomplete="off">
     <label for="modelId">Model ID</label><input id="modelId" list="modelOptions" required autocomplete="off"><datalist id="modelOptions"><option value="nvidia/nemotron-3-super-120b-a12b"><option value="nvidia/nemotron-3-nano-30b-a3b"><option value="nvidia/nemotron-3-ultra-550b-a55b"></datalist>
-    <label for="apiKey">API key <span id="keyHint">Kept in memory while the app is open</span></label><input id="apiKey" type="password" autocomplete="new-password" placeholder="Paste your key here">
+    <label for="apiKey">API key <span id="keyHint">Paste it here; it is never written to disk</span></label><input id="apiKey" type="password" autocomplete="new-password" placeholder="Paste your NVIDIA key here">
+    <p class="settings-note">For NVIDIA-hosted models, paste the key from <a href="https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b" target="_blank" rel="noreferrer">build.nvidia.com</a> here. It stays in memory and is cleared when SPARKLE CODER quits. The CLI alternative is the <code>NVIDIA_API_KEY</code> environment variable.</p>
     <div class="settings-row"><div><label for="executionMode">Run commands in</label><select id="executionMode"><option value="local">This computer</option><option value="docker">Docker container</option></select></div><div><label for="toolFormat">Tool format</label><select id="toolFormat"><option value="native">Native tool calls</option><option value="json">JSON fallback</option></select></div></div>
-    <details class="advanced"><summary>Run limits</summary><div class="settings-row"><div><label for="maxSteps">Model calls per run</label><input id="maxSteps" type="number" min="1" max="500"></div><div><label for="maxTokens">Output tokens per call</label><input id="maxTokens" type="number" min="256" max="131072"></div></div></details>
+    <details class="advanced"><summary>Optional run caps</summary><div class="settings-row"><div><label for="maxSteps">Model calls <span>Blank = unlimited</span></label><input id="maxSteps" type="number" min="1" placeholder="Unlimited"></div><div><label for="maxSeconds">Elapsed seconds <span>Blank = unlimited</span></label><input id="maxSeconds" type="number" min="1" placeholder="Unlimited"></div></div><div class="settings-row"><div><label for="maxTotalTokens">Total tokens <span>Blank = unlimited</span></label><input id="maxTotalTokens" type="number" min="1" placeholder="Unlimited"></div><div><label for="maxTokens">Output tokens per call</label><input id="maxTokens" type="number" min="256" max="131072"></div></div></details>
+    <p class="settings-note">Runs have no model-call, time, or total-token cap unless you enter one. Use <strong>Stop</strong> whenever you want to end a task. Output tokens per response and command timeouts remain endpoint safeguards.</p>
     <p class="settings-note" id="executionNote">Local commands use your computer's permissions. You approve each agent-proposed command.</p>
     <div id="connectionResult" class="inline-result" role="status" hidden></div>
     <div class="dialog-actions"><button type="button" id="testConnection" class="button secondary">Test connection</button><button type="submit" class="button primary" id="saveSettings">Save connection</button></div>
@@ -334,11 +336,14 @@ function openSettings() {
   const s=appState.settings; id("baseUrl").value=s.base_url; id("modelId").value=s.model; id("apiKey").value="";
   id("apiKey").placeholder=s.key_configured?"Key is set. Leave blank to keep it.":"Paste your key here";
   id("keyHint").textContent=s.key_configured?"A key is already configured":"Kept in memory while the app is open";
-  id("executionMode").value=s.execution; id("toolFormat").value=s.tool_format; id("maxSteps").value=s.max_steps; id("maxTokens").value=s.max_tokens;
+  id("executionMode").value=s.execution; id("toolFormat").value=s.tool_format;
+  id("maxSteps").value=s.max_steps ?? ""; id("maxSeconds").value=s.max_seconds ?? "";
+  id("maxTotalTokens").value=s.max_total_tokens ?? ""; id("maxTokens").value=s.max_tokens;
   id("connectionType").value=s.base_url.includes("integrate.api.nvidia.com")?"nvidia":"local"; id("connectionResult").hidden=true; id("settingsDialog").showModal();
 }
 async function saveSettings(test=false) {
-  const body={base_url:id("baseUrl").value.trim(),model:id("modelId").value.trim(),api_key:id("apiKey").value.trim(),execution:id("executionMode").value,tool_format:id("toolFormat").value,max_steps:Number(id("maxSteps").value),max_tokens:Number(id("maxTokens").value)};
+  const optionalNumber=(name)=>{const raw=id(name).value.trim(); if(!raw)return null; const value=Number(raw); return Number.isInteger(value)?value:raw;};
+  const body={base_url:id("baseUrl").value.trim(),model:id("modelId").value.trim(),api_key:id("apiKey").value.trim(),execution:id("executionMode").value,tool_format:id("toolFormat").value,max_steps:optionalNumber("maxSteps"),max_seconds:optionalNumber("maxSeconds"),max_total_tokens:optionalNumber("maxTotalTokens"),max_tokens:Number(id("maxTokens").value)};
   id("saveSettings").disabled=true; id("testConnection").disabled=true;
   try {
     await api("/settings",body); id("apiKey").value=""; await refreshState();

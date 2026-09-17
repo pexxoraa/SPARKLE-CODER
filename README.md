@@ -4,11 +4,11 @@ A local browser app for your personal NVIDIA Nemotron coding agent.
 Chat with the agent, select projects, approve commands, inspect file changes,
 review checks, and resume saved tasks without using a terminal interface.
 
-Version **0.3.1**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
+Version **0.3.2**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
 Python **3.11+** is required once; there are no third-party runtime packages.
 Launchers are included for Windows, macOS, and Linux.
 
-## SPARKLE CODER 0.3.1
+## SPARKLE CODER 0.3.2
 
 The application is now named **SPARKLE CODER**. NVIDIA Nemotron remains the
 model family used for inference. The Python package is `sparkle_coder`;
@@ -28,6 +28,8 @@ the location after launch.
   and build/dist/target output are included within the documented limits.
 - A Run monitor with the current action, elapsed time, model calls, an activity
   timeline, real command output, plan steps, and check results.
+- Unlimited model calls, elapsed time, and total tokens by default; optional caps
+  remain available in connection settings, with Stop always available.
 - Pause/resume between actions, Stop, and optional per-file diff approval.
 - Save a task report or its persistent JSONL event logs.
 - Choose a device data folder; copy existing managed data there while retaining
@@ -41,7 +43,7 @@ registered projects remain available through the same local settings.
 
 - Chat, follow-up tasks, a live activity feed, plans, and usage counts.
 - NVIDIA-hosted or local Nemotron connection settings and model discovery.
-- Password input with endpoint-specific, memory-only API keys.
+- API-key entry in **Connect Nemotron**; keys stay endpoint-specific and memory-only.
 - Project registration, a native folder picker where Tk is available, and
   a manual folder-path fallback. Blank paths create new project folders.
 - Text-file previews, file-tool diffs, recorded check output, and run history.
@@ -50,6 +52,21 @@ registered projects remain available through the same local settings.
 - Responsive layout, keyboard shortcuts, and dark styling with no external
   frontend dependencies or fonts. Ctrl/Command + Enter submits a task;
   Ctrl/Command + K starts a new task when the agent is idle.
+
+### API keys and run length
+
+Open **Connect Nemotron** in the sidebar and paste the NVIDIA key into **API
+key**. Click **Test connection**, then **Save connection**. The key is held only
+in the running app process and is cleared when you quit; it is never written to
+`settings.json`, a project, or Git. For the optional terminal interface, set
+`NVIDIA_API_KEY` before launching (or set the endpoint's configured
+`api_key_env`).
+
+SPARKLE CODER does not stop a run after a fixed number of model calls, seconds,
+or total tokens. Leave the three **Optional run caps** fields blank for this
+behavior. A positive value restores that cap for the saved endpoint settings.
+The per-response output limit and command timeout are separate transport
+safeguards; **Stop** remains the way to end an active run.
 
 ## Agent capabilities
 

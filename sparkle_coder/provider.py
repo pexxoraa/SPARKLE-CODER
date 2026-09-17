@@ -86,7 +86,7 @@ class NemotronClient:
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def request(self, path: str, body: dict | None = None):
-        headers = {"Accept": "application/json", "User-Agent": "sparkle-coder/0.3.1"}
+        headers = {"Accept": "application/json", "User-Agent": "sparkle-coder/0.3.2"}
         if self.config.api_key:
             headers["Authorization"] = "Bearer " + self.config.api_key
         payload = None if body is None else json.dumps(body).encode("utf-8")

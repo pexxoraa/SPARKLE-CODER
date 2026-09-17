@@ -2,11 +2,13 @@ test_agent_cannot_invoke_internal_python_methods_as_tools (test_agent.AgentTests
 test_call_budget_pauses_and_keeps_work (test_agent.AgentTests.test_call_budget_pauses_and_keeps_work) ... ok
 test_checks_are_stale_after_a_file_change (test_agent.AgentTests.test_checks_are_stale_after_a_file_change) ... ok
 test_context_trims_whole_tool_exchanges_and_preserves_correction (test_agent.AgentTests.test_context_trims_whole_tool_exchanges_and_preserves_correction) ... ok
+test_default_run_has_no_model_call_cap (test_agent.AgentTests.test_default_run_has_no_model_call_cap) ... ok
 test_failing_acceptance_forces_repair_before_completion (test_agent.AgentTests.test_failing_acceptance_forces_repair_before_completion) ... ok
 test_final_claim_cannot_bypass_failed_acceptance (test_agent.AgentTests.test_final_claim_cannot_bypass_failed_acceptance) ... ok
 test_no_checks_means_unverified (test_agent.AgentTests.test_no_checks_means_unverified) ... ok
 test_resume_marks_unknown_command_without_replaying (test_agent.AgentTests.test_resume_marks_unknown_command_without_replaying) ... ok
 test_truncated_generation_cannot_execute_a_partial_action (test_agent.AgentTests.test_truncated_generation_cannot_execute_a_partial_action) ... ok
+test_legacy_default_run_caps_are_migrated_to_unlimited (test_branding.StorageCompatibilityTests.test_legacy_default_run_caps_are_migrated_to_unlimited) ... ok
 test_new_install_name_and_existing_new_location_take_precedence (test_branding.StorageCompatibilityTests.test_new_install_name_and_existing_new_location_take_precedence) ... ok
 test_rename_reuses_existing_project_data (test_branding.StorageCompatibilityTests.test_rename_reuses_existing_project_data) ... ok
 test_javascript_executes_through_same_language_independent_runner (test_execution.ExecutionTests.test_javascript_executes_through_same_language_independent_runner) ... ok
@@ -49,6 +51,7 @@ test_denied_command_does_not_run_and_approval_cannot_be_replayed (test_web.WebTe
 test_invalid_settings_do_not_replace_working_configuration (test_web.WebTests.test_invalid_settings_do_not_replace_working_configuration) ... ok
 test_keys_are_memory_only_and_bound_to_the_selected_endpoint (test_web.WebTests.test_keys_are_memory_only_and_bound_to_the_selected_endpoint) ... ok
 test_project_registration_preserves_files_and_file_access_stays_confined (test_web.WebTests.test_project_registration_preserves_files_and_file_access_stays_confined) ... ok
+test_run_caps_are_unlimited_when_blank (test_web.WebTests.test_run_caps_are_unlimited_when_blank) ... ok
 test_saved_task_can_resume_after_reopening_application (test_web.WebTests.test_saved_task_can_resume_after_reopening_application) ... ok
 test_stopping_at_approval_cancels_run_and_releases_workspace (test_web.WebTests.test_stopping_at_approval_cancels_run_and_releases_workspace) ... ok
 test_undo_refuses_to_destroy_a_later_manual_edit (test_web.WebTests.test_undo_refuses_to_destroy_a_later_manual_edit) ... ok
@@ -69,6 +72,6 @@ test_undo_checks_all_conflicts_before_writing (test_workspace.WorkspaceTests.tes
 test_undo_restores_original_and_removes_new_file (test_workspace.WorkspaceTests.test_undo_restores_original_and_removes_new_file) ... ok
 
 ----------------------------------------------------------------------
-Ran 69 tests in 6.675s
+Ran 72 tests in 6.697s
 
 OK

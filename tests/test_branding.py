@@ -11,6 +11,21 @@ from sparkle_coder.webapp import AppService, default_app_dir
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "Linux storage-location selection")
 class StorageCompatibilityTests(unittest.TestCase):
+    def test_legacy_default_run_caps_are_migrated_to_unlimited(self):
+        with tempfile.TemporaryDirectory() as folder:
+            app_dir = Path(folder) / "nemotron-workspace"
+            app_dir.mkdir()
+            (app_dir / "settings.json").write_text(json.dumps({
+                "settings": {"max_steps": 40, "max_seconds": 1800,
+                              "max_total_tokens": 250000},
+                "projects": [], "selected_project": None}))
+            app = AppService(app_dir)
+            self.assertIsNone(app.config().max_steps)
+            self.assertIsNone(app.config().max_seconds)
+            self.assertIsNone(app.config().max_total_tokens)
+            self.assertEqual(app.data["settings_version"], 2)
+            app.close()
+
     def test_rename_reuses_existing_project_data(self):
         with tempfile.TemporaryDirectory() as folder:
             parent = Path(folder)

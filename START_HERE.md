@@ -1,6 +1,6 @@
 # Open SPARKLE CODER
 
-Version **0.3.1** is a browser interface for your personal coding agent.
+Version **0.3.2** is a browser interface for your personal coding agent.
 Everyday use takes place in the browser: connect a model, select a project,
 describe work, approve commands, inspect files, and continue saved tasks.
 
@@ -62,7 +62,7 @@ Open **Connect Nemotron** in the sidebar.
 
 - **NVIDIA API:** obtain your key from the
   [Nemotron model page](https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b),
-  enter it in the password field, and use the model ID your account can access.
+  paste it into the **API key** field, and use the model ID your account can access.
   Click **Test connection**, then **Save connection**. Hosted inference does
   not require a GPU in this computer; selected project context goes to NVIDIA.
 - **Local or custom server:** enter the URL of an already running compatible
@@ -77,7 +77,9 @@ also exercises generation and tool calls. A server must expose both
 
 Keys entered in the app are kept in memory, scoped to their endpoint, and
 cleared when the engine quits. Reenter them after restarting. Settings and
-project paths are saved; passwords are not. Do not put credentials in prompts.
+project paths are saved; passwords are not. Do not put credentials in prompts
+or `nemotron.toml`. The optional terminal interface reads `NVIDIA_API_KEY`
+(or the configured `api_key_env`) from the environment before launch.
 
 ## Build something
 
@@ -116,7 +118,9 @@ In **Project files**:
 
 Open **Run monitor** while a task runs. It shows the current action, elapsed
 time, model calls, plan steps, checks, operation history, and live command output.
-**Pause** waits until the current operation finishes before blocking the next
+Runs have unlimited model calls, elapsed time, and total tokens by default. In
+**Connect Nemotron → Optional run caps**, leave the cap fields blank to keep
+that behavior or enter positive values when you want a cap. **Pause** waits until the current operation finishes before blocking the next
 one. **Resume** releases it. **Stop** cancels commands and further actions.
 Use **Save report** and **Save log** to keep readable results and recorded events.
 

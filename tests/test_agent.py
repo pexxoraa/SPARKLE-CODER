@@ -24,7 +24,7 @@ class AgentTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.workspace = Workspace(Path(self.tmp.name))
-        self.config = Config(auto_approve=True, max_steps=12)
+        self.config = Config(auto_approve=True)
 
     def agent(self, provider, verify=None):
         session = Session.create(self.workspace, "Build the requested program", verify or [], {})
@@ -49,6 +49,14 @@ class AgentTests(unittest.TestCase):
     def test_no_checks_means_unverified(self):
         provider = SequenceProvider([Completion("Done.", [], {}), Completion("Done.", [], {})])
         self.assertEqual(self.agent(provider).run(), "unverified")
+
+    def test_default_run_has_no_model_call_cap(self):
+        sequence = [calls(("list_files", {})) for _ in range(41)]
+        sequence.extend([Completion("Done.", [], {}), Completion("Done.", [], {})])
+        agent = self.agent(SequenceProvider(sequence))
+        self.assertIsNone(agent.config.max_steps)
+        self.assertEqual(agent.run(), "unverified")
+        self.assertGreater(agent.session.state["usage"]["calls"], 40)
 
     def test_checks_are_stale_after_a_file_change(self):
         agent = self.agent(SequenceProvider([]))

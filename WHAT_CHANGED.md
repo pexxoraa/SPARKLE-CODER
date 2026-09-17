@@ -1,8 +1,13 @@
-# SPARKLE CODER 0.3.1 — files, supervision, device storage
+# SPARKLE CODER 0.3.2 — files, supervision, device storage
 
-Version 0.3.1 renames the app, package, browser branding, icon and launchers to
+Version 0.3.1 renamed the app, package, browser branding, icon and launchers to
 SPARKLE CODER. Existing device data is detected automatically. The file transfer
 and monitoring improvements from 0.3 are retained.
+
+Version 0.3.2 removes the default model-call, elapsed-time, and total-token run
+caps. Leave the optional cap fields blank for an open-ended run; use **Stop** to
+end it yourself. API keys are entered in **Connect Nemotron → API key** and
+remain memory-only.
 
 | Need | Control | Behavior |
 | --- | --- | --- |
@@ -19,6 +24,8 @@ and monitoring improvements from 0.3 are retained.
 | End a run | Stop | Cancels commands and prevents subsequent actions; model requests may finish first |
 | Keep evidence | Save report / Save log | Downloads summaries/checks and persistent JSONL activity |
 | Choose where data lives | Device storage | Copies managed data to an empty device folder and remembers the choice |
+| Configure model access | Connect Nemotron | Paste a hosted NVIDIA key in **API key**; the value is cleared when the app quits |
+| Keep a task running | Optional run caps | Blank model-call, elapsed-time, and total-token fields mean unlimited; Stop remains available |
 
 File-tool approval and undo do not cover changes made by an approved shell
 command. Commands remain individually reviewable. No tool can guarantee that

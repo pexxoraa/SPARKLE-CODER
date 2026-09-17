@@ -192,16 +192,21 @@ class Agent:
         malformed = 0
         self.say(f"Session {self.session.id} | {self.config.model} | {self.config.execution}")
         try:
-            for step in range(self.config.max_steps):
+            step = 0
+            while True:
+                step += 1
                 self.checkpoint()
                 if self.should_stop():
                     return self.finish("interrupted", "Stopped by the user. Work is saved and can be resumed.")
+                if self.config.max_steps is not None and step > self.config.max_steps:
+                    return self.finish("paused", "Model-call limit reached. Work is saved; resume to continue.")
                 used = state["usage"]["prompt_tokens"] + state["usage"]["completion_tokens"] - starting_tokens
-                if time.monotonic() - started >= self.config.max_seconds:
+                if self.config.max_seconds is not None and time.monotonic() - started >= self.config.max_seconds:
                     return self.finish("paused", "Run time budget reached. Resume to continue.")
-                if used >= self.config.max_total_tokens:
+                if self.config.max_total_tokens is not None and used >= self.config.max_total_tokens:
                     return self.finish("paused", "Run token budget reached. Resume to continue.")
-                self.say(f"[{step + 1}/{self.config.max_steps}] Asking Nemotron...")
+                progress = str(step) if self.config.max_steps is None else f"{step}/{self.config.max_steps}"
+                self.say(f"[{progress}] Asking Nemotron...")
                 messages = self.context()
                 state["usage"]["calls"] += 1
                 self.session.save()
@@ -279,7 +284,6 @@ class Agent:
                 if verification_attempts >= 3:
                     return self.finish("blocked", response.content + "\n\nRuntime: acceptance checks still fail.")
                 self.feedback(evidence)
-            return self.finish("paused", "Model-call budget reached. Work is saved; resume to continue.")
         except KeyboardInterrupt:
             return self.finish("interrupted", "Interrupted. Pending tool calls will not be automatically replayed.")
         except (ModelError, OSError, ValueError) as exc:

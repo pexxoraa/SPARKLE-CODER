@@ -18,9 +18,10 @@ class Config:
     top_p: float = 0.95
     max_tokens: int = 16000
     context_chars: int = 120000
-    max_steps: int = 40
-    max_seconds: int = 1800
-    max_total_tokens: int = 250000
+    # Run caps are optional. None means unlimited; Stop remains available in the UI.
+    max_steps: int | None = None
+    max_seconds: int | None = None
+    max_total_tokens: int | None = None
     request_timeout: int = 120
     command_timeout: int = 120
     execution: str = "local"
@@ -58,8 +59,13 @@ class Config:
             raise ValueError("tool_format must be native or json.")
         if self.execution not in ("local", "docker"):
             raise ValueError("execution must be local or docker.")
-        for name in ("max_tokens", "max_steps", "max_seconds", "max_total_tokens",
-                     "request_timeout", "command_timeout"):
+        if type(self.max_tokens) is not int or self.max_tokens <= 0:
+            raise ValueError("max_tokens must be a positive integer.")
+        for name in ("max_steps", "max_seconds", "max_total_tokens"):
+            value = getattr(self, name)
+            if value is not None and (type(value) is not int or value <= 0):
+                raise ValueError(f"{name} must be a positive integer or null for unlimited.")
+        for name in ("request_timeout", "command_timeout"):
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer.")
@@ -101,13 +107,17 @@ def load_config(workspace: Path, overrides: dict | None = None) -> Config:
         "base_url": os.environ.get("NEMOTRON_BASE_URL"),
         "model": os.environ.get("NEMOTRON_MODEL"),
     }.items() if value})
-    data.update({key: value for key, value in (overrides or {}).items() if value is not None})
+    # Optional run caps use None as an explicit "unlimited" override. This lets
+    # the browser and CLI remove legacy caps from an older nemotron.toml.
+    unlimited = {"max_steps", "max_seconds", "max_total_tokens"}
+    data.update({key: value for key, value in (overrides or {}).items()
+                 if value is not None or key in unlimited})
     config = Config(**data)
     config.validate()
     return config
 
 
-CONFIG_TEMPLATE = '''# Personal Nemotron coding agent. Keep API keys in environment variables.
+CONFIG_TEMPLATE = '''# Personal Nemotron coding agent. Keep API keys in environment variables or enter them in the app.
 base_url = "https://integrate.api.nvidia.com/v1"
 model = "nvidia/nemotron-3-super-120b-a12b"
 api_key_env = "NVIDIA_API_KEY"
@@ -118,9 +128,10 @@ temperature = 1.0
 top_p = 0.95
 max_tokens = 16000
 context_chars = 120000
-max_steps = 40
-max_seconds = 1800
-max_total_tokens = 250000
+# Run caps are optional. Omit them for unlimited model calls, elapsed time, and total tokens.
+# max_steps = 40
+# max_seconds = 1800
+# max_total_tokens = 250000
 request_timeout = 120
 command_timeout = 120
 
