@@ -5,7 +5,7 @@ an OpenAI-compatible endpoint, edits real files, executes development commands,
 remembers project decisions, and repairs failures from actual test output.
 
 The browser interface is documented in [START_HERE.md](START_HERE.md).
-These optional commands remain available in version **0.4.0**.
+These optional commands remain available in version **0.5.0**.
 
 ## Included
 

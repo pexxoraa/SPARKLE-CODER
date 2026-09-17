@@ -1,4 +1,50 @@
-# SPARKLE CODER 0.4.0 — reliable repairs and resumable work
+# SPARKLE CODER 0.5.0 — simple explanations and PROJECTS
+
+The recovery screen explains what happened, what it means and the next action.
+Commands and tracebacks are collapsed under optional details. **Try fixing it**
+continues a repair; **Explain this simply** asks for a read-only explanation.
+Command approval also shows its purpose, when supplied by the agent, with the
+exact command available for inspection.
+
+The reported “Expected vocab 36, got 54” incident has a dedicated explanation:
+the test expected 36 text symbols and the program produced 54. The count alone
+does not establish which is wrong. The agent now receives instructions to
+inspect training data, normalization and special symbols, and to split independent
+checks instead of stopping all testing at the first assertion.
+
+A new **revise_check** tool handles mistaken agent-created checks. It requires
+existing check IDs, a current source file read, its matching hash, a reason, and
+a passing replacement command. Earlier failures remain in history. Required
+commands and discovered project commands cannot be retired with this tool.
+This records evidence and accountability; it does not formally prove that the
+agent's reasoning or replacement test is correct.
+
+**What works and what is left** provides a result explanation, usage steps,
+limitations and feature checks. The runtime derives check status from recorded
+results and file freshness. The feature-to-check mapping is authored by the
+model and may be incomplete. Untested features stay marked as untested.
+
+Default storage is now **PROJECTS** and **APP_DATA** inside the SPARKLE CODER
+application folder. Managed projects and saved tasks from older app data are
+copied automatically on the first default launch. Originals remain as backups;
+externally registered projects stay in place. Partial migration failures do not
+commit new settings, and existing destination projects are never overwritten.
+Checks that name the old project location cannot accidentally test the backup.
+
+Quit the old app before upgrading. Use a writable app folder, and preserve
+**PROJECTS** and **APP_DATA** when updating program files in future. Open **Device
+storage → Open PROJECTS folder** to find the actual project location.
+
+A simple offline to-do list is now the first starter suggestion. API keys still
+go in **Connect Nemotron → API key → Test connection → Save connection**. Keys
+stay in memory until the engine quits. Runs retain the unlimited defaults and
+optional user caps introduced earlier.
+
+These additions address opaque failures, mistaken tests and unclear completion.
+They have not been benchmarked against other agents and are not claimed to be
+exclusive inventions. See **TEST_REPORT.md** for validation and remaining limits.
+
+## Retained from 0.4.0 — repairs and resumable work
 
 This update removes premature completion cutoffs, adds automatic check discovery,
 and continues repairs while the code or check evidence changes. The agent now

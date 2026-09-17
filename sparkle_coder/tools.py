@@ -3,11 +3,14 @@
 import json
 import difflib
 import re
+import uuid
 
 from .checks import discover_checks
+from .explanations import check_title, explain_failure
 from .execution import CommandRunner
 from .state import Session, now
 from .workspace import MAX_FILE_BYTES, Redactor, Workspace, WorkspaceError, write_json
+from .verification import check_key, identify_checks, replacements
 
 
 def schema(name, description, properties, required=()):
@@ -38,10 +41,25 @@ SCHEMAS = [
            {"path": S, "expected_sha256": S}, ["path", "expected_sha256"]),
     schema("run_command", "Run a finite foreground terminal command in the workspace. May require user approval. "
            "Use installed toolchains for any language; do not start background servers.",
-           {"command": S, "cwd": S, "timeout": I}, ["command"]),
+           {"command": S, "cwd": S, "timeout": I, "purpose": S}, ["command"]),
     schema("verify", "Run a build/test/check command and record real evidence with a workspace freshness hash. "
            "Use for meaningful behavioral checks, not echo or a claim that tests pass.",
-           {"command": S, "cwd": S, "timeout": I}, ["command"]),
+           {"command": S, "cwd": S, "timeout": I, "label": S}, ["command"]),
+    schema("revise_check", "Correct an agent-authored check whose assumption is demonstrably wrong. "
+           "First read the evidence file. Explain the reason and preserve the behavior being tested. "
+           "The old checks are superseded only after the replacement actually passes. User-required and "
+           "project-discovered checks cannot be replaced. Never replace a check just to hide a failure.",
+           {"check_ids": {"type": "array", "items": S}, "command": S, "cwd": S, "label": S,
+            "reason": S, "evidence_path": S, "expected_sha256": S},
+           ["check_ids", "command", "label", "reason", "evidence_path", "expected_sha256"]),
+    schema("update_delivery", "Explain the delivered result for a person with no programming background. "
+           "Give simple steps to use it and honest limitations. Link each feature to actual verify check IDs; "
+           "the runtime derives pass/fail status, not your prose. An empty check_ids list means not checked.",
+           {"summary": S, "how_to_use": {"type": "array", "items": S},
+            "limitations": {"type": "array", "items": S}, "features": {"type": "array", "items": {
+                "type": "object", "properties": {"feature": S, "check_ids": {"type": "array", "items": S}},
+                "required": ["feature", "check_ids"], "additionalProperties": False}}},
+           ["summary", "how_to_use", "limitations", "features"]),
     schema("update_plan", "Maintain a short execution checklist. Preserve the user's task and acceptance criteria.",
            {"steps": {"type": "array", "maxItems": 20, "items": {"type": "object",
              "properties": {"step": S, "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]}},
@@ -104,7 +122,7 @@ class ToolSet:
         result = self.redactor.value(result)
         details = {"ok": result.get("ok", False)}
         if isinstance(arguments, dict):
-            for key in ("path", "command", "query"):
+            for key in ("path", "command", "query", "label", "purpose"):
                 if key in arguments:
                     details[key] = self.redactor.text(str(arguments[key]))[:600]
         if not result.get("ok"):
@@ -149,6 +167,10 @@ class ToolSet:
         start_line, max_lines = max(1, start_line), min(400, max(1, max_lines))
         selection = lines[start_line - 1:start_line - 1 + max_lines]
         content = "\n".join(f"{i}: {line}" for i, line in enumerate(selection, start_line))
+        reads = self.session.state.setdefault("read_evidence", {})
+        reads[path] = digest
+        if len(reads) > 200:
+            del reads[next(iter(reads))]
         return {"path": path, "sha256": digest, "total_lines": len(lines),
                 "content": content[:24000], "truncated": len(content) > 24000,
                 "instructions": self.workspace.instructions(path)}
@@ -188,26 +210,105 @@ class ToolSet:
     def delete_file(self, path, expected_sha256):
         return self.session.mutate(path, None, expected_sha256)
 
-    def run_command(self, command, cwd=".", timeout=None):
-        return self.runner.run(command, cwd, timeout)
+    def run_command(self, command, cwd=".", timeout=None, purpose=""):
+        if purpose:
+            self.observe("action_context", {"command": command, "purpose": purpose[:800]})
+        result = self.runner.run(command, cwd, timeout)
+        if result.get("exit_code") is not None:
+            self.session.state["verification_fingerprint"] = None
+        return result
 
-    def verify(self, command, cwd=".", timeout=None, *, trusted=False):
+    def verify(self, command, cwd=".", timeout=None, label="", *, trusted=False, source=None):
+        label = label[:160] or check_title(command)
+        self.observe("action_context", {"command": command, "purpose": "Check: " + label})
         try:
+            if any(previous != str(self.workspace.root) and previous in command
+                   for previous in self.session.state.get("previous_workspaces", [])):
+                raise ValueError("This check still points to a previous project folder. Use the current project folder or relative paths so the backup copy is not tested by mistake.")
             result = self.runner.run(command, cwd, timeout, trusted=trusted)
         except (OSError, ValueError) as exc:
             result = {"ok": False, "exit_code": None, "output": str(exc)}
         if re.search(r"\bRan 0 tests\b", result.get("output", "")):
             result["ok"] = False
             result["output"] += "\nNo tests were collected. Inspect the test path and run the actual suite."
-        record = {"at": now(), "command": command, "cwd": cwd, "required": trusted,
+        record = {"id": "check-" + uuid.uuid4().hex[:12], "key": check_key(command, cwd),
+                  "label": label, "source": source or ("user" if trusted else "agent"),
+                  "at": now(), "command": command, "cwd": cwd, "required": trusted,
                   "exit_code": result.get("exit_code"), "ok": result["ok"],
                   "denied": result.get("denied", False),
                   "cancelled": result.get("cancelled", False),
+                  "timed_out": result.get("timed_out", False),
                   "fingerprint": self.workspace.fingerprint(),
                   "output": result.get("output", "")[-12000:]}
         self.session.state["checks"].append(self.redactor.value(record))
+        self.session.state["verification_fingerprint"] = record["fingerprint"]
         self.session.save()
+        result.update(check_id=record["id"], label=label)
+        if not result["ok"]:
+            result["explanation"] = self.redactor.value(explain_failure(record))
         return result
+
+    def revise_check(self, check_ids, command, label, reason, evidence_path, expected_sha256, cwd="."):
+        if not check_ids or len(check_ids) > 20 or not all(isinstance(x, str) for x in check_ids):
+            raise ValueError("Name the existing check IDs to correct.")
+        if not 20 <= len(reason.strip()) <= 2000:
+            raise ValueError("Explain which assumption was wrong, what proves it, and which behavior the replacement still checks.")
+        state = self.session.state
+        identify_checks(state)
+        by_id = {c["id"]: c for c in state["checks"]}
+        if any(identity not in by_id for identity in check_ids):
+            raise ValueError("A check ID was not found in this task.")
+        old = [by_id[identity] for identity in check_ids]
+        discovered = {check_key(c["command"], c["cwd"]) for c in self.discover_checks()["checks"]}
+        for check in old:
+            if (check.get("required") or check["command"] in state["required_checks"]
+                    or check["source"] != "agent" or check["key"] in discovered):
+                raise ValueError("User-required and existing project checks cannot be replaced. Repair the code or ask the user about a conflicting requirement.")
+        _, digest = self.workspace.read(evidence_path)
+        if digest != expected_sha256 or state.get("read_evidence", {}).get(evidence_path) != digest:
+            raise ValueError("Read the current evidence file before correcting the check, and use its exact sha256.")
+        old_keys = list(dict.fromkeys(c["key"] for c in old))
+        new_key = check_key(command, cwd)
+        retired = replacements(state)
+        if new_key in old_keys or new_key in retired or any(key in retired for key in old_keys):
+            raise ValueError("Use active checks and a genuinely corrected replacement command.")
+        result = self.verify(command, cwd, label=label)
+        if not result["ok"]:
+            return {**result, "superseded": False,
+                    "next_step": "The replacement did not pass. Fix the remaining failure, then call revise_check again. The original evidence is retained."}
+        # The evidence file may have changed during the command. Do not silently
+        # attach an outdated explanation to a correction.
+        if self.workspace.read(evidence_path)[1] != digest:
+            return {"ok": False, "check_id": result["check_id"], "superseded": False,
+                    "error": "The evidence file changed during the replacement check. Read it again and review the explanation."}
+        revision = self.redactor.value({"at": now(), "old_ids": check_ids, "old_keys": old_keys,
+            "new_id": result["check_id"], "new_key": new_key, "reason": reason,
+            "evidence_path": evidence_path, "evidence_sha256": digest, "label": label[:160]})
+        state.setdefault("check_revisions", []).append(revision)
+        self.session.save()
+        self.observe("check_revised", {"text": reason, "path": evidence_path, "label": label[:160]})
+        return {**result, "superseded": True, "replaced_check_ids": check_ids,
+                "note": "The corrected check passed. Earlier results and the reason for correction remain in the history."}
+
+    def update_delivery(self, summary, how_to_use, limitations, features):
+        if not summary.strip() or len(summary) > 2000:
+            raise ValueError("Give a short explanation of what was built.")
+        for values in (how_to_use, limitations):
+            if len(values) > 12 or any(not isinstance(x, str) or not x.strip() or len(x) > 600 for x in values):
+                raise ValueError("Use up to 12 short, plain-language items.")
+        identify_checks(self.session.state)
+        known = {c["id"] for c in self.session.state["checks"]}
+        if len(features) > 20:
+            raise ValueError("Summarize up to 20 features.")
+        for item in features:
+            if (not isinstance(item, dict) or set(item) != {"feature", "check_ids"}
+                    or not isinstance(item["feature"], str) or not 1 <= len(item["feature"]) <= 300
+                    or not isinstance(item["check_ids"], list)
+                    or any(not isinstance(key, str) or key not in known for key in item["check_ids"])):
+                raise ValueError("Each feature needs plain text and existing check IDs, or an empty list if not tested.")
+        self.session.state["delivery"] = self.redactor.value({"summary": summary, "how_to_use": how_to_use,
+                                                             "limitations": limitations, "features": features})
+        return {"saved": True, "note": "Feature status is derived from recorded checks and freshness, not from claimed completion."}
 
     def update_plan(self, steps):
         if len(steps) > 20:

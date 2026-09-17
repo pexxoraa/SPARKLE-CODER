@@ -21,3 +21,6 @@ launcher.log
 .coverage
 .DS_Store
 Thumbs.db
+APP_DATA/
+PROJECTS/*
+!PROJECTS/README.md

@@ -8,6 +8,7 @@ import uuid
 
 from .state import now
 from .workspace import Redactor, clean_terminal
+from .explanations import check_title
 
 
 ACTIVE = ("queued", "running", "approval", "pausing", "paused_by_user", "stopping")
@@ -24,6 +25,7 @@ class Run:
         self.lock = threading.RLock()
         self.stop, self.decision, self.pause_requested = threading.Event(), threading.Event(), threading.Event()
         self.approval = None
+        self.action_context = {}
         self.approved = False
         self.thread = None
         self.error = None
@@ -52,16 +54,30 @@ class Run:
                 event["text"] = clean_terminal(event["text"])
             if kind == "model_start":
                 self.current_action = "Waiting for Nemotron response"
+            elif kind == "action_context":
+                self.action_context = data
+                self.current_action = data.get("purpose", "Preparing the next step")
+            elif kind == "check_revised":
+                self.current_action = "Corrected a test using project evidence"
             elif kind == "model_retry":
                 self.current_action = f"Reconnecting in {data['delay']}s · attempt {data['attempt']} · {data['reason']}"
             elif kind == "verification_start":
-                self.current_action = "Checking: " + data["command"]
+                self.current_action = "Checking: " + check_title(data["command"])
             elif kind == "repair":
                 self.current_action = "Diagnosing check failures and continuing repairs"
             elif kind == "tool_start":
-                self.current_action = data.get("tool", "Tool") + ": " + str(data.get("path") or data.get("command") or "project")
+                names = {"read_file": "Reading a file", "list_files": "Looking through the project",
+                         "write_file": "Writing a file", "edit_file": "Updating a file", "verify": "Testing the project",
+                         "revise_check": "Checking a test correction", "update_delivery": "Preparing simple usage instructions",
+                         "run_command": "Preparing a command", "request_input": "Preparing a question for you"}
+                self.current_action = names.get(data.get("tool"), "Working on the project")
+                if data.get("path"):
+                    self.current_action += ": " + data["path"]
             elif kind == "command_start":
-                self.current_action = "Running: " + data["command"]
+                self.current_action = ((self.action_context.get("purpose")
+                                        if self.action_context.get("command") == data["command"] else "")
+                                       or check_title(data["command"]))
+                self.action_context = {}
             elif kind in ("command_end", "tool_end", "model_end"):
                 self.current_action = "Processing the result"
             self.events.append(event)
@@ -136,7 +152,8 @@ class Run:
         return accepted and not self.stop.is_set()
 
     def approve(self, command):
-        return self.request_approval({"kind": "command", "command": clean_terminal(command)})
+        purpose = self.action_context.get("purpose", "") if self.action_context.get("command") == command else ""
+        return self.request_approval({"kind": "command", "command": clean_terminal(command), "purpose": purpose})
 
     def approve_edit(self, request):
         return self.request_approval({"kind": "file edit", **request})

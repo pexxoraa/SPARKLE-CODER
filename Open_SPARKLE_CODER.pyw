@@ -37,6 +37,11 @@ def launch():
         with logfile.open("w", encoding="utf-8") as stream:
             with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
                 return main()
+    except PermissionError:
+        show_error("SPARKLE CODER needs permission to save its projects beside the app.\n\n"
+                   "Move the whole SPARKLE-CODER folder to a writable location, such as Documents, then open it again. "
+                   "Keep the PROJECTS and APP_DATA folders with the app.")
+        return 1
     except Exception as exc:
         show_error("SPARKLE CODER could not start.\n\n" + Redactor().text(str(exc)))
         return 1

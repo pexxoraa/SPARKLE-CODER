@@ -16,12 +16,22 @@ from .demo import DemoProvider, calls, python_command
 from .provider import NemotronClient
 from .monitor import Run, ACTIVE, session_events
 from .files import UserFiles
-from .storage import resolve_storage, relocate
+from .storage import resolve_storage, relocate, migrate_legacy
 from .state import Session, now
+from .explanations import check_title, explain_failure, simple_recovery
+from .verification import proof_summary, replacements, active_checks
 from .workspace import Redactor, Workspace, clean_terminal, write_json
 
 
+def application_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
 def default_app_dir() -> Path:
+    return application_root() / "APP_DATA"
+
+
+def legacy_app_dirs() -> tuple[Path, Path]:
     if os.name == "nt":
         parent = Path(os.environ.get("LOCALAPPDATA", Path.home()))
         current, legacy = parent / "SparkleCoder", parent / "NemotronWorkspace"
@@ -31,11 +41,7 @@ def default_app_dir() -> Path:
     else:
         parent = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         current, legacy = parent / "sparkle-coder", parent / "nemotron-workspace"
-    # Reuse previous installs so a product rename cannot hide projects or history.
-    for directory in (current, legacy):
-        if any((directory / name).exists() for name in ("settings.json", "storage-location.json", "instance.json")):
-            return directory
-    return current
+    return current, legacy
 
 
 SETTINGS = ("base_url", "model", "tool_format", "execution", "max_steps", "max_seconds",
@@ -63,6 +69,9 @@ class BrowserDemo:
 class AppService:
     def __init__(self, directory: Path, provider_factory=NemotronClient):
         self.bootstrap = directory.expanduser().resolve()
+        portable = self.bootstrap == default_app_dir()
+        if portable:
+            migrate_legacy(self.bootstrap, application_root() / "PROJECTS", legacy_app_dirs())
         self.directory = resolve_storage(self.bootstrap)
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.settings_path = self.directory / "settings.json"
@@ -71,12 +80,21 @@ class AppService:
         defaults = {key: getattr(Config(), key) for key in SETTINGS}
         self.data = {"settings": defaults, "projects": [], "selected_project": None,
                      "settings_version": SETTINGS_SCHEMA_VERSION}
+        self.projects_directory = (application_root() / "PROJECTS" if portable and self.directory == self.bootstrap
+                                   else self.directory / "PROJECTS")
         migrated = False
         if self.settings_path.exists():
             saved = json.loads(self.settings_path.read_text("utf-8"))
             self.data["settings"].update({k: v for k, v in saved.get("settings", {}).items() if k in SETTINGS})
             self.data["projects"] = saved.get("projects", [])
             self.data["selected_project"] = saved.get("selected_project")
+            if saved.get("projects_path"):
+                selected_projects = Path(saved["projects_path"])
+                if not selected_projects.is_absolute():
+                    raise ValueError("The saved projects folder must have an absolute path.")
+                self.projects_directory = selected_projects
+            if saved.get("storage_migration"):
+                self.data["storage_migration"] = saved["storage_migration"]
             saved_version = saved.get("settings_version", 1)
             if type(saved_version) is not int:
                 saved_version = 1
@@ -95,10 +113,12 @@ class AppService:
         self.connected_endpoint = None
         self.jobs = {}
         self.provider_factory = provider_factory
+        self.data["projects_path"] = str(self.projects_directory)
+        self.projects_directory.mkdir(parents=True, exist_ok=True)
         if migrated:
             self.save()
         if not self.data["projects"]:
-            self.add_project("My project", str(self.directory / "Projects" / "my-project"))
+            self.add_project("My project", str(self.projects_directory / "my-project"))
 
     def save(self):
         # Deliberately excludes API keys and run access tokens.
@@ -165,7 +185,7 @@ class AppService:
         name = name.strip() or "Untitled project"
         if not path.strip():
             slug = re.sub(r"[^a-z0-9_-]+", "-", name.lower()).strip("-") or "project"
-            path = str(self.directory / "Projects" / (slug + "-" + uuid.uuid4().hex[:6]))
+            path = str(self.projects_directory / (slug + "-" + uuid.uuid4().hex[:6]))
         root = Path(path).expanduser()
         if not root.is_absolute():
             raise ValueError("Use an absolute project folder path, or leave it blank to create a project.")
@@ -200,20 +220,41 @@ class AppService:
             return {"version": __version__, "projects": list(self.data["projects"]),
                     "selected_project": self.data["selected_project"],
                     "settings": self.public_settings(), "active_run": job.public() if job else None,
-                    "storage": {"path": str(self.directory), "projects_path": str(self.directory / "Projects")}}
+                    "storage": {"path": str(self.directory), "projects_path": str(self.projects_directory),
+                                "migration": self.data.get("storage_migration")}}
 
     def snapshot(self, project_id, session_id, include_events=True):
         _, workspace = self.project(project_id)
         session = Session.load(workspace, session_id)
         state = session.state
+        # A saved result may be opened after a manual edit or file import. Do
+        # not label that evidence current just because the task has not resumed.
+        if (state.get("verification_fingerprint") and state["status"] != "running"
+                and workspace.fingerprint() != state["verification_fingerprint"]):
+            state["verification_fingerprint"] = None
         user_requests = set(state.get("user_requests", [state["goal"]]))
         messages = [{"role": m["role"], "content": m["content"]}
                     for m in state["messages"]
                     if m.get("content") and (m["role"] == "assistant"
                                             or m["role"] == "user" and m["content"] in user_requests)]
+        recovery = state.get("recovery")
+        if state["status"] in ("needs_input", "blocked", "unverified") and not (recovery or {}).get("title"):
+            recovery = simple_recovery(state, state.get("summary", ""), (recovery or {}).get("action", "checks"))
+        required = set(state["required_checks"])
+        retired = {key: revision for key, revision in replacements(state).items()
+                   if not any(c["key"] == key and (c.get("required") or c["command"] in required)
+                              for c in state["checks"])}
+        active_ids = {c["id"] for c in active_checks(state)}
+        checks = [{**check, "label": check.get("label") or check_title(check["command"]),
+                   "active": check["id"] in active_ids, "superseded": check["key"] in retired,
+                   "correction_reason": retired.get(check["key"], {}).get("reason", ""),
+                   "explanation": explain_failure(check) if not check["ok"] else None}
+                  for check in state["checks"][-60:]]
         return {key: state.get(key) for key in
                 ("id", "goal", "status", "created", "updated", "plan", "usage", "summary", "model", "undone", "task_mode", "recovery")} | {
-            "messages": messages, "actions": state["actions"][-100:], "checks": state["checks"][-40:],
+            "messages": messages, "actions": state["actions"][-100:], "checks": checks,
+            "recovery": recovery, "proof": proof_summary(state), "delivery": state.get("delivery", {}),
+            "check_revisions": state.get("check_revisions", []),
             "changed_files": sorted({r["path"] for r in state["journal"]}),
             "required_checks": state["required_checks"],
             "events": session_events(session) if include_events else [],
@@ -269,7 +310,7 @@ class AppService:
         if not isinstance(verify, list) or len(verify) > 20 or any(
                 not isinstance(c, str) or not c.strip() or len(c) > 10000 for c in verify):
             raise ValueError("Use at most 20 nonempty verification commands.")
-        _, workspace = self.project(project_id)
+        project, workspace = self.project(project_id)
         config = self.config(workspace)
         if demo:
             config.model = "OFFLINE-SCRIPTED-DEMO"
@@ -305,6 +346,8 @@ class AppService:
                         else:
                             session = Session.create(workspace, goal, verify, config.public_info())
                         session.state["task_mode"] = task_mode or session.state.get("task_mode", "build")
+                        session.state["previous_workspaces"] = list(dict.fromkeys(
+                            session.state.get("previous_workspaces", []) + project.get("previous_paths", [])))
                         session.save()
                         with job.lock:
                             job.bind(session)
@@ -321,7 +364,7 @@ class AppService:
                         job.error = clean_terminal(Redactor((config.api_key,)).text(str(exc)))
                         if session is not None:
                             session.state.update({"status": "needs_input", "summary": job.error,
-                                "recovery": {"action": "retry", "message": job.error}})
+                                "recovery": simple_recovery(session.state, job.error, "retry")})
                             try:
                                 session.save()
                             except (OSError, ValueError):
@@ -378,12 +421,32 @@ class AppService:
 
     def export_report(self, project_id, session_id):
         snapshot = self.snapshot(project_id, session_id)
+        recovery = snapshot.get("recovery") or {}
+        summary = recovery.get("what_happened") or snapshot.get("summary") or "Task has not finished."
         lines = ["# Task report", "", snapshot["goal"], "", "Status: " + snapshot["status"], "",
-                 snapshot.get("summary") or "Task has not finished.", "", "## File-tool changes", ""]
+                 summary]
+        if recovery:
+            lines += ["", recovery.get("meaning", ""), "", recovery.get("next_step", "")]
+        delivery = snapshot.get("delivery", {})
+        if delivery.get("how_to_use"):
+            lines += ["", "## How to use it", ""]
+            lines += [f"{index}. {step}" for index, step in enumerate(delivery["how_to_use"], 1)]
+        if delivery.get("limitations"):
+            lines += ["", "## Still to check or finish", ""] + ["- " + text for text in delivery["limitations"]]
+        proof = snapshot["proof"]
+        lines += ["", f"Recorded checks: {proof['passed']} of {proof['total']} current checks passed.",
+                  proof["note"], "", "## File-tool changes", ""]
         lines += ["- " + path for path in snapshot["changed_files"]]
         lines += ["", "## Checks", ""]
         for check in snapshot["checks"]:
-            lines += [("PASS" if check["ok"] else "FAIL") + ": " + check["command"], "", check.get("output", ""), ""]
+            label = "CORRECTED" if check["superseded"] else "RECORDED PASS" if check["ok"] else "NEEDS ATTENTION"
+            lines += [label + ": " + check["label"], ""]
+            if check["superseded"]:
+                lines += ["Reason: " + check["correction_reason"], ""]
+            elif check["explanation"]:
+                lines += [check["explanation"]["what_happened"], ""]
+            lines += ["<details><summary>Technical details</summary>", "", "```text", check["command"],
+                      check.get("output", ""), "```", "", "</details>", ""]
         lines += ["## Recent activity", "", "The recent activity excerpt contains up to 200 events.", ""]
         for event in snapshot["events"]:
             lines.append(event.get("at", "") + " " + event.get("kind", "") + " " +

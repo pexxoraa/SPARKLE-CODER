@@ -64,19 +64,19 @@ id("app").innerHTML = `
               <h1>What are we building?</h1>
               <p>Describe the result. Watch the work.<br>Review every change.</p>
               <div class="suggestions">
-                <button class="suggestion" data-prompt="Build a responsive web app for tracking personal projects. Include persistence, useful error states, and tests. Start by inspecting this project."><span data-icon="code"></span><strong>Build an app</strong><span>Turn an idea into working code</span></button>
+                <button class="suggestion" data-prompt="Build a simple to-do list that works offline. Let me add, complete, and delete tasks, and keep them after refreshing. Use a simple web page. Test the behavior and give me easy steps to open and use it. I do not have programming experience."><span data-icon="code"></span><strong>Start with a to-do list</strong><span>A small first project with clear checks</span></button>
                 <button class="suggestion" data-prompt="Inspect this project, identify a concrete bug, reproduce it with a test, and fix it without changing unrelated behavior."><span data-icon="bug"></span><strong>Fix a bug</strong><span>Find the cause and verify a fix</span></button>
                 <button class="suggestion" data-mode="ask" data-prompt="Explore this project. Explain its architecture and how to build and test it. Do not change files yet."><span data-icon="folder"></span><strong>Explore a project</strong><span>Understand the code you have</span></button>
               </div>
               <button id="demoButton" class="demo-button"><span class="demo-play" data-icon="play"></span><span><strong>Take it for a test run</strong><span>A local demo. No API key needed.</span></span><span class="demo-arrow">↗</span></button>
             </div>
             <div id="messages" class="messages" aria-live="polite"></div>
-            <div id="resultBanner" class="result-banner" hidden></div>
+            <div id="resultBanner" class="result-banner" hidden></div><section id="deliveryPanel" class="delivery-panel" aria-label="What works and how to use it" hidden></section>
           </div>
           <div id="approvalCard" class="approval-card" hidden>
             <div class="approval-heading"><span data-icon="shield"></span><strong id="approvalTitle">Permission to run a command</strong></div>
             <p id="approvalDescription">This command runs with your configured permissions and may change files. Review it before allowing.</p>
-            <pre id="approvalCommand"></pre>
+            <p id="approvalPurpose" class="approval-purpose" hidden></p><details id="approvalDetails"><summary>View the exact command or file changes</summary><pre id="approvalCommand"></pre></details>
             <div class="approval-actions"><button id="denyCommand" class="button secondary">Deny</button><button id="allowCommand" class="button primary">Allow once</button></div>
           </div>
           <form id="taskForm" class="composer">
@@ -141,7 +141,7 @@ id("app").innerHTML = `
 </dialog>
 <dialog id="projectDialog"><div class="dialog-header"><div><span class="eyebrow">YOUR FILES</span><h2>Add a project</h2></div><button class="icon-button" data-close="projectDialog" aria-label="Close project dialog"><span data-icon="close"></span></button></div><form id="projectForm"><label for="projectName">Project name</label><input id="projectName" required maxlength="100" placeholder="My next project"><label for="projectFolder">Existing folder <span>Optional</span></label><div class="folder-input"><input id="projectFolder" placeholder="Leave blank to create a new folder"><button type="button" id="browseFolder" class="button secondary">Browse</button></div><p class="settings-note">A new folder is created when you leave this blank. Existing files are preserved.</p><div id="projectError" class="inline-result" hidden></div><div class="dialog-actions"><button type="submit" class="button primary" id="saveProject">Open project</button></div></form></dialog>
 <dialog id="undoDialog"><div class="dialog-header"><h2>Undo these file changes?</h2><button class="icon-button" data-close="undoDialog" aria-label="Close rollback dialog"><span data-icon="close"></span></button></div><p class="dialog-intro">Restore files edited by this task. Later changes are protected. Shell commands and external actions cannot be undone here.</p><ul id="undoFiles"></ul><div class="dialog-actions"><button class="button secondary" data-close="undoDialog">Cancel</button><button class="button danger" id="confirmUndo">Undo file changes</button></div></dialog>
-<dialog id="storageDialog"><div class="dialog-header"><div><span class="eyebrow">LOCAL DEVICE STORAGE</span><h2>Your data folder</h2></div><button class="icon-button" data-close="storageDialog" aria-label="Close storage settings"><span data-icon="close"></span></button></div><p class="dialog-intro">Projects, task history, logs, and settings stay on your device. Choose an empty folder to move managed data there. Existing projects outside this folder stay in their current locations.</p><label for="storagePath">Data folder</label><div class="folder-input"><input id="storagePath"><button id="browseStorage" class="button secondary">Browse</button></div><div class="storage-links"><button id="openStorage" class="text-button">Open current folder ↗</button><button id="copyStoragePath" class="text-button">Copy current path</button></div><p class="settings-note">Switching folders copies data first and keeps the original as a backup. API keys remain in memory.</p><div id="storageResult" class="inline-result" hidden></div><div class="dialog-actions"><button id="saveStorage" class="button primary">Copy data and use this folder</button></div></dialog>
+<dialog id="storageDialog"><div class="dialog-header"><div><span class="eyebrow">LOCAL DEVICE STORAGE</span><h2>Your data folder</h2></div><button class="icon-button" data-close="storageDialog" aria-label="Close storage settings"><span data-icon="close"></span></button></div><p class="dialog-intro">New projects live in the PROJECTS folder inside SPARKLE CODER. Saved tasks stay with each project. Settings live in APP_DATA beside PROJECTS. Choose an empty folder to move managed data there. Existing projects outside this folder stay in their current locations.</p><label for="projectsPath">Your projects folder</label><input id="projectsPath" readonly><button id="openProjectsDirectory" class="button secondary projects-open">Open PROJECTS folder</button><p id="storageMigration" class="settings-note" hidden></p><label for="storagePath">Settings and managed data <span>Advanced: choose another location</span></label><div class="folder-input"><input id="storagePath"><button id="browseStorage" class="button secondary">Browse</button></div><div class="storage-links"><button id="openStorage" class="text-button">Open current folder ↗</button><button id="copyStoragePath" class="text-button">Copy current path</button></div><p class="settings-note">Switching folders copies data first and keeps the original as a backup. API keys remain in memory.</p><div id="storageResult" class="inline-result" hidden></div><div class="dialog-actions"><button id="saveStorage" class="button primary">Copy data and use this folder</button></div></dialog>
 <dialog id="duplicateDialog"><div class="dialog-header"><h2>Copy a project file</h2><button class="icon-button" data-close="duplicateDialog" aria-label="Close"><span data-icon="close"></span></button></div><form id="duplicateForm"><label for="duplicatePath">New path inside this project</label><input id="duplicatePath" required><p class="settings-note">Use forward slashes for folders. Existing files are preserved.</p><div class="dialog-actions"><button type="submit" class="button primary">Create copy</button></div></form></dialog>
 <dialog id="exportDialog"><div class="dialog-header"><h2>Copy project to your device</h2><button class="icon-button" data-close="exportDialog" aria-label="Close"><span data-icon="close"></span></button></div><form id="exportForm"><label for="exportPath">Destination folder</label><div class="folder-input"><input id="exportPath" required placeholder="Absolute device-folder path"><button type="button" id="browseExport" class="button secondary">Browse</button></div><p class="settings-note">Creates a new project copy inside this folder. Existing files are preserved. Dependencies, credentials, Git internals, and agent history are excluded.</p><div id="exportResult" class="inline-result" hidden></div><div class="dialog-actions"><button type="submit" id="saveExport" class="button primary">Copy project</button></div></form></dialog>
 <dialog id="quitDialog"><div class="dialog-header"><h2>Close SPARKLE CODER?</h2></div><p class="dialog-intro">The local engine will stop. Your projects and run history are saved. Use the desktop launcher to reopen it.</p><div class="dialog-actions"><button class="button secondary" data-close="quitDialog">Keep working</button><button id="confirmQuit" class="button danger">Quit app</button></div></dialog>
@@ -206,6 +206,8 @@ function renderControls() {
   id("approvalCard").hidden=!(currentRun?.approval && currentRun.status==="approval");
   if(currentRun?.approval) {
     const a=currentRun.approval, editing=a.kind==="file edit";
+    id("approvalPurpose").hidden=!a.purpose;id("approvalPurpose").textContent=a.purpose?"Why this step: "+a.purpose:"";
+    if(id("approvalDetails").dataset.approval!==a.id){id("approvalDetails").dataset.approval=a.id;id("approvalDetails").open=editing;}
     id("approvalTitle").textContent=editing?"Review file edit: "+a.path:"Permission to run a command";
     id("approvalDescription").textContent=editing?(a.truncated?"Preview is truncated. Deny and request a smaller edit for a complete review.":"Review the proposed diff. Allow once applies this edit."):"This command runs with your configured permissions and may change files. Review it before allowing.";
     id("approvalCommand").textContent=editing?a.diff:a.command;
@@ -235,22 +237,8 @@ function renderSession(session) {
     lastMessageKey=messageKey; if(nearBottom || !session) container.scrollTop=container.scrollHeight;
   }
   id("resultBanner").hidden=!session || busy() || session.status==="running";
-  if(session && !busy()) {
-    const banner=id("resultBanner");banner.replaceChildren();banner.className="result-banner "+session.status;
-    banner.append(node("strong","",friendly(session.status)));
-    const attention=["needs_input","blocked","unverified"].includes(session.status);
-    const description=attention?(session.recovery?.message||session.summary||"Review the checks and continue this task."):session.status==="checked"?"Recorded checks passed. Review the changes and coverage in Checks.":session.status==="answered"?"Project question answered. Switch to Build when you want changes.":"Work is saved. Continue when you are ready.";
-    banner.append(node("p","",description));
-    if(session.status!=="undone") {
-      const actions=node("div","recovery-actions");
-      if(attention||["paused","interrupted"].includes(session.status)) {
-        const resume=node("button","button primary","Resume task");resume.onclick=()=>id("taskForm").requestSubmit();actions.append(resume);
-      }
-      if(session.recovery?.action==="connection") {const settings=node("button","button secondary","Connection settings");settings.onclick=openSettings;actions.prepend(settings);}
-      if(attention||session.status==="checked") {const checks=node("button","button secondary","Review checks");checks.onclick=()=>{setTab("checks");document.body.classList.add("details-open");};actions.append(checks);}
-      banner.append(actions);
-    }
-  }
+  if(session && !busy()) renderRecovery(session);
+  renderDelivery(session);
   id("callsMetric").textContent=session?.usage?.calls ?? "—";
   const usage=session?.usage; id("tokensMetric").textContent=usage ? ((usage.prompt_tokens||0)+(usage.completion_tokens||0)).toLocaleString() : "—";
   id("changeCount").textContent=session?.changed_files?.length||0; id("checkCount").textContent=session?.checks?.length||0;
@@ -265,19 +253,65 @@ function renderActivity() {
   const target=id("activityList"); target.replaceChildren();
   const actions=currentSession?.actions||[];
   if(!actions.length && !runEvents.length) { target.append(emptyPanel("Ready when you are","The agent's progress and decisions will appear here.")); return; }
-  const names={list_files:"Explored project",read_file:"Read file",search_files:"Searched code",write_file:"Wrote file",edit_file:"Edited file",delete_file:"Removed file",run_command:"Ran command",verify:"Ran verification",update_plan:"Updated plan",remember:"Saved project memory"};
-  actions.slice(-25).reverse().forEach(a=> { const row=node("div","activity-row"); const marker=node("span","activity-marker "+(a.ok?"ok":"failed")); marker.innerHTML=icon(a.ok?"check":"close"); const detail=node("div"); detail.append(node("strong","",names[a.tool]||a.tool),node("span","",a.path||a.command||a.query||(a.ok?"Completed":"Needs attention"))); row.append(marker,detail); if(a.error) row.title=a.error; target.append(row); });
+  const names={revise_check:"Corrected a test",update_delivery:"Prepared usage instructions",discover_checks:"Found project checks",request_input:"Asked for a missing detail",list_files:"Explored project",read_file:"Read file",search_files:"Searched code",write_file:"Wrote file",edit_file:"Edited file",delete_file:"Removed file",run_command:"Ran command",verify:"Ran verification",update_plan:"Updated plan",remember:"Saved project memory"};
+  actions.slice(-25).reverse().forEach(a=> { const row=node("div","activity-row"); const marker=node("span","activity-marker "+(a.ok?"ok":"failed")); marker.innerHTML=icon(a.ok?"check":"close"); const detail=node("div"); detail.append(node("strong","",names[a.tool]||a.tool),node("span","",a.label||a.purpose||a.path||a.query||(a.command?"Command recorded — open Run monitor for details":a.ok?"Completed":"Needs attention"))); row.append(marker,detail); if(a.error) row.title=a.error; target.append(row); });
   if(busy()) { const latest=runEvents[runEvents.length-1]; const row=node("div","live-activity",latest?.text?.slice(0,250)||"Working…"); target.prepend(row); }
 }
+function renderRecovery(session) {
+  const banner=id("resultBanner"),recovery=session.recovery,attention=["needs_input","blocked","unverified"].includes(session.status);
+  banner.replaceChildren();banner.className="result-banner "+session.status;
+  banner.append(node("strong","recovery-title",attention?(recovery?.title||"This task needs another step"):friendly(session.status)));
+  if(attention) {
+    banner.append(node("p","",recovery?.what_happened||"The work is saved, but the checks are not complete."));
+    if(recovery?.meaning)banner.append(node("p","recovery-meaning",recovery.meaning));
+    banner.append(node("p","recovery-next",recovery?.next_step||"Ask SPARKLE CODER to investigate, or add a missing detail below."));
+    const details=node("details","technical-details");details.append(node("summary","","Technical details (optional)"),node("pre","",recovery?.technical_details||session.summary||"See the recorded checks for details."));banner.append(details);
+  } else banner.append(node("p","",session.status==="checked"?"The recorded checks passed. See what they cover below.":session.status==="answered"?"Switch to Build when you want changes.":"Your work is saved. Continue when you are ready."));
+  if(session.status==="undone")return;
+  const actions=node("div","recovery-actions");
+  if(attention||["paused","interrupted"].includes(session.status)) {
+    const fix=recovery?.can_auto_fix!==false&&attention;
+    const resume=node("button","button primary",fix?"Try fixing it":"Resume task");
+    resume.onclick=()=>fix?followup("Please investigate and fix the failed checks. Check whether the code or the test is wrong, preserve my requirements, and explain the result simply.","build"):id("taskForm").requestSubmit();actions.append(resume);
+  }
+  if(recovery?.action==="connection"){const settings=node("button","button secondary","Connection settings");settings.onclick=openSettings;actions.prepend(settings);}
+  if(attention){const explain=node("button","button secondary","Explain this simply");explain.onclick=()=>followup("Explain the current problem in simple words. Tell me what happened, what is still unknown, and exactly what I need to do, if anything. Do not change files.","ask");actions.append(explain);}
+  if(attention||session.status==="checked"){const checks=node("button","button secondary","See checks");checks.onclick=()=>{setTab("checks");document.body.classList.add("details-open");};actions.append(checks);}
+  banner.append(actions);
+}
+function followup(message,mode) {
+  if(busy())return;
+  id("taskMode").value=mode;
+  id("goal").value=[id("goal").value.trim(),message].filter(Boolean).join("\n\n");
+  id("taskForm").requestSubmit();
+}
+function renderDelivery(session) {
+  const panel=id("deliveryPanel"),delivery=session?.delivery||{},proof=session?.proof;
+  panel.hidden=!session||(!delivery.summary&&!proof?.total);panel.replaceChildren();if(panel.hidden)return;
+  panel.append(node("h2","","What works and what is left"));
+  if(delivery.summary){panel.append(node("p","delivery-summary",delivery.summary),node("span","delivery-source","Agent explanation · check evidence below"));}
+  if(proof?.total)panel.append(node("p","proof-count",proof.passed+" of "+proof.total+" current checks passed"+(proof.needs_recheck?" · "+proof.needs_recheck+" need to run again":"")));
+  const labels={passed:"Check passed",needs_fix:"Needs a fix",not_checked:"Not checked yet",needs_recheck:"Needs another check"};
+  (proof?.features||[]).forEach(feature=>{const row=node("div","proof-feature");row.append(node("span","",feature.feature),node("span","proof-state "+feature.status,labels[feature.status]));panel.append(row);});
+  if(proof?.note)panel.append(node("p","proof-note",proof.note));
+  if(delivery.how_to_use?.length){panel.append(node("h3","","How to use it"));const steps=node("ol","usage-steps");delivery.how_to_use.forEach(step=>steps.append(node("li","",step)));panel.append(steps);}
+  if(delivery.limitations?.length){panel.append(node("h3","","Still to check or finish"));const list=node("ul","usage-steps");delivery.limitations.forEach(item=>list.append(node("li","",item)));panel.append(list);}
+  if(!busy()){const controls=node("div","recovery-actions"),how=node("button","button secondary","Explain how to use it"),folder=node("button","button secondary","Open project folder");how.onclick=()=>followup("Explain how to open and use this project, step by step, for someone who does not program. State any missing setup clearly.","ask");folder.onclick=()=>action(()=>api("/open-folder",{project_id:projectId}));controls.append(how,folder);panel.append(controls);}
+}
+function checkCard(c) {
+  const box=node("details","check-card "+(c.superseded?"superseded":c.ok?"passed":"failed"));
+  const summary=node("summary"),badge=node("span","check-indicator",c.superseded?"↪":c.ok?"✓":"×");
+  summary.append(badge,node("span","check-command",c.label||"Project check"));box.append(summary);
+  if(c.superseded)box.append(node("p","check-explanation","This earlier test was corrected. Its result is kept for reference."),node("p","check-explanation",c.correction_reason));
+  else if(c.explanation)box.append(node("p","check-explanation",c.explanation.what_happened),node("p","check-explanation",c.explanation.meaning));
+  box.append(node("div","check-meta",(c.required?"Your required check":c.source==="discovered"?"Existing project check":"Agent-created check")+" · "+(c.ok?"Recorded pass":"Did not pass")),node("pre","check-output",c.command+"\n\n"+(c.output||"No output was produced.")));return box;
+}
 function renderChecks() {
-  const target=id("checksList"); target.replaceChildren();
-  if(!currentSession?.checks?.length) { target.append(emptyPanel("No checks yet","Build and test results will appear here. Add required checks to your task.")); return; }
-  [...currentSession.checks].reverse().forEach(c=> {
-    const box=node("details","check-card "+(c.ok?"passed":"failed"));
-    const summary=node("summary"), badge=node("span","check-indicator",c.ok?"✓":"×");
-    summary.append(badge,node("span","check-command",c.command)); box.append(summary);
-    const meta=node("div","check-meta",(c.required?"Required check":"Agent-selected check")+" · exit "+c.exit_code); box.append(meta,node("pre","check-output",c.output||"(No output)")); target.append(box);
-  });
+  const target=id("checksList"),checks=currentSession?.checks||[];target.replaceChildren();
+  if(!checks.length){target.append(emptyPanel("No checks yet","Checks show whether the project behaves as intended. SPARKLE CODER can find or create them."));return;}
+  checks.filter(c=>c.active!==false).slice().reverse().forEach(c=>target.append(checkCard(c)));
+  const earlier=checks.filter(c=>c.active===false);
+  if(earlier.length){const history=node("details","check-history");history.append(node("summary","","Earlier checks and corrections ("+earlier.length+")"));earlier.slice().reverse().forEach(c=>history.append(checkCard(c)));target.append(history);}
 }
 async function loadChanges() {
   id("changesList").replaceChildren();
@@ -418,7 +452,9 @@ function renderSupervision() {
 }
 function eventDescription(e) {
   if(e.kind==="model_retry")return "Reconnecting · attempt "+e.attempt+" in "+e.delay+"s · "+e.reason;
-  if(e.kind==="verification_start")return "Running project check: "+e.command;
+  if(e.kind==="verification_start")return "Running a project check";
+  if(e.kind==="action_context")return e.purpose;
+  if(e.kind==="check_revised")return "Corrected a test: "+e.label;
   const labels={model_start:"Model request started",model_end:"Model response received",tool_start:"Started "+(e.tool||"tool"),tool_end:(e.ok?"Completed ":"Failed ")+(e.tool||"tool"),command_start:"Command started",command_end:e.cancelled?"Command stopped":"Command exited "+e.exit_code,approval_requested:"Approval needed",approval_decision:e.allowed?"You approved this action":"You denied this action",paused:"Paused by you",resumed:"Resumed by you",pause_requested:"Pause requested",stop_requested:"Stop requested",finished:"Task finished",message:e.text};
   return labels[e.kind]||e.text||e.kind;
 }
@@ -431,7 +467,7 @@ function renderMonitor() {
   id("monitorElapsed").textContent=currentRun?duration(currentRun.elapsed_seconds):events.length?duration(events[events.length-1].elapsed):"—";
   id("monitorCalls").textContent=session?.usage?.calls??"—";
   id("monitorFiles").textContent=session?.changed_files?.length||0;
-  const checks=session?.checks||[];id("monitorChecks").textContent=checks.filter(c=>c.ok).length+" / "+checks.length;
+  const checks=(session?.checks||[]).filter(c=>c.active!==false);id("monitorChecks").textContent=(session?.proof?.passed??checks.filter(c=>c.ok).length)+" / "+(session?.proof?.total??checks.length);
   const plan=session?.plan||[],completed=plan.filter(p=>p.status==="completed").length;
   id("planProgress").textContent=plan.length?"Plan: "+completed+" of "+plan.length+" steps complete":"No plan recorded yet.";
   id("planProgressBar").hidden=!plan.length;id("planProgressBar").max=plan.length||1;id("planProgressBar").value=completed;
@@ -476,7 +512,7 @@ async function uploadSelection(selection) {
     id("transferErrors").textContent=errors.join("\n");id("transferErrors").hidden=!errors.length;
   } finally {transferBusy=false;id("cancelImport").hidden=true;id("uploadFiles").value="";id("uploadFolder").value="";await loadFiles();renderControls();}
 }
-function openStorageSettings() {id("storagePath").value=appState.storage.path;id("storageResult").hidden=true;id("storageDialog").showModal();}
+function openStorageSettings() {id("storagePath").value=appState.storage.path;id("projectsPath").value=appState.storage.projects_path;id("storageMigration").hidden=!appState.storage.migration;id("storageMigration").textContent=appState.storage.migration?.message||"";id("storageResult").hidden=true;id("storageDialog").showModal();}
 
 id("trackTask").onclick=id("showMonitor").onclick=()=>changeView("monitor");
 id("reviewPending").onclick=()=>{changeView("build");id("approvalCard").scrollIntoView({block:"nearest"});};
@@ -507,9 +543,10 @@ id("browseExport").onclick=()=>action(()=>chooseFolder("exportPath"));
 id("exportForm").onsubmit=e=>{e.preventDefault();action(async()=>{id("saveExport").disabled=true;id("exportResult").hidden=false;id("exportResult").textContent="Copying project…";try{const result=await api("/projects/"+projectId+"/export-folder",{path:id("exportPath").value});id("exportResult").textContent=result.files+" files copied to "+result.path;}catch(error){id("exportResult").textContent=error.message;}finally{id("saveExport").disabled=false;}});};
 id("storageButton").onclick=openStorageSettings;
 id("browseStorage").onclick=()=>action(()=>chooseFolder("storagePath"));
+id("openProjectsDirectory").onclick=()=>action(()=>api("/open-folder",{target:"projects"}));
 id("openStorage").onclick=()=>action(()=>api("/open-folder",{}));
 id("copyStoragePath").onclick=()=>action(()=>copyText(appState.storage.path));
-id("saveStorage").onclick=()=>action(async()=>{id("saveStorage").disabled=true;id("storageResult").hidden=false;id("storageResult").textContent="Copying data and switching folders…";try{const result=await api("/storage",{path:id("storagePath").value});await refreshState();id("storageResult").textContent=result.message||"Already using this folder.";id("storagePath").value=appState.storage.path;await loadFiles();}catch(error){id("storageResult").textContent=error.message;}finally{id("saveStorage").disabled=false;}});
+id("saveStorage").onclick=()=>action(async()=>{id("saveStorage").disabled=true;id("storageResult").hidden=false;id("storageResult").textContent="Copying data and switching folders…";try{const result=await api("/storage",{path:id("storagePath").value});await refreshState();id("storageResult").textContent=result.message||"Already using this folder.";id("storagePath").value=appState.storage.path;id("projectsPath").value=appState.storage.projects_path;await loadFiles();}catch(error){id("storageResult").textContent=error.message;}finally{id("saveStorage").disabled=false;}});
 
 document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>changeView(b.dataset.view));
 document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));

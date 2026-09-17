@@ -1,6 +1,6 @@
 # Open SPARKLE CODER
 
-Version **0.4.0** is a browser interface for your personal coding agent.
+Version **0.5.0** is a browser interface for your personal coding agent.
 Everyday use takes place in the browser: connect a model, select a project,
 describe work, approve commands, inspect files, and continue saved tasks.
 
@@ -8,14 +8,20 @@ describe work, approve commands, inspect files, and continue saved tasks.
 
 Use **Quit app** in the old window before opening this updated launcher. Extract
 this version into a new application folder; do not overwrite a running app.
-Your registered projects and settings remain in their existing device data
-folder. SPARKLE CODER detects the earlier Nemotron Workspace storage location
-automatically, including its selected-folder pointer. The launcher detects a still-running older version and tells you to
-quit it before continuing.
+On first launch, SPARKLE CODER detects the earlier SPARKLE CODER or Nemotron
+Workspace data folder, including an older selected-folder pointer. It copies
+managed projects and saved tasks into **PROJECTS** inside this application folder.
+Original folders stay as backups. Projects you registered from external folders
+stay at those locations. The launcher detects a still-running older version and
+tells you to quit it before continuing.
+
+For future updates, quit the app and replace its program files in this same
+folder. Keep **PROJECTS** and **APP_DATA**; they contain your work and settings.
 
 ## First launch
 
-1. Extract the complete ZIP. Keep all its files together.
+1. Extract the complete ZIP into a writable folder, such as Documents. Keep all
+   its files together. The app needs to create **PROJECTS** and **APP_DATA** here.
 2. Install **Python 3.11 or newer** once, if it is not already installed.
    Use [python.org](https://www.python.org/downloads/) on Windows/macOS or your
    Linux software manager. Windows users should include the Python launcher
@@ -36,7 +42,14 @@ You can also open **OPEN_FIRST.html** for a graphical setup guide.
 These are source-app launchers, not signed standalone installers; Python is
 required. Windows and macOS launch behavior has not been tested here.
 
-## Choose your device data folder
+## Find your projects
+
+New projects are saved in **SPARKLE-CODER/PROJECTS**. Each project has its own
+folder. App settings are saved in **SPARKLE-CODER/APP_DATA**. Open **Device storage
+→ Open PROJECTS folder** to see them in your file manager. Your files are stored
+on your device, not in browser storage.
+
+## Choose a different device data folder (optional)
 
 Open **Device storage** in the sidebar. Its field shows the current storage
 location. Use **Browse** or paste an absolute path to an empty folder, then
@@ -102,9 +115,9 @@ file manager into the field.
 
 For a first real task, try:
 
-> Build a personal project tracker as a responsive web app. Support creating,
-> editing, and completing projects, save data locally, and include tests and
-> setup instructions. Inspect the folder first and explain your plan.
+> Build a simple offline to-do list. Let me add, complete and delete tasks, and
+> keep them after refreshing. Test those actions. Explain how to open and use
+> it in simple steps; I do not have programming experience.
 
 Click **Run agent**. Approve commands after reviewing them. Required commands
 entered under **Checks** are authorized when you start the task and run
@@ -121,13 +134,30 @@ later manual changes. It cannot reverse shell commands or external actions.
 
 Temporary API and network failures retry automatically and appear in Run monitor.
 If your key or model access needs attention, use **Connection settings**, fix the
-connection, and choose **Resume task**. For **Your input needed**, read the exact
-question or check output, enter the missing detail, and resume the saved task.
+connection, and choose **Resume task**. Problems explain **what happened**, **what
+it means**, and **what to do next**. Choose **Try fixing it** to continue a repair,
+or **Explain this simply** to ask for an explanation without changing files.
+Commands and tracebacks are inside **Technical details (optional)**.
+
+For example, **“Expected vocab 36, got 54”** means a test expected 36 text
+symbols but the program found 54. It does not prove whether the program or the
+test is wrong. The agent should inspect the text data and special symbols first.
+It can correct its own mistaken test after reading source evidence and passing
+a replacement check; earlier failures stay in **Earlier checks and corrections**.
+It must not simply change the expected number to whatever the program returned.
 
 Build mode continues to repair failed checks while evidence changes. If the agent
 keeps proposing completion against the same evidence, it saves the work and asks
-for help. The Checks panel retains every recorded pass and failure. Questions in
+for help with a simple explanation. It takes another look at relevant source
+files before asking. Saved history retains every recorded pass and failure; the
+Checks panel shows recent results and corrections. Questions in
 Ask mode finish as **Answer ready** instead of waiting for software verification.
+
+After a build, **What works and what is left** shows recorded checks and the
+agent's usage instructions. **Not checked yet** means there is no linked check;
+**Needs another check** means files changed since that result. A passed check
+only establishes the behavior it actually tested. The model's feature-to-check
+mapping can still be incomplete, so a green status is not a guarantee.
 
 ## Copy, import, download, and monitor
 

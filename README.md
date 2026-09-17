@@ -4,11 +4,33 @@ A local browser app for your personal NVIDIA Nemotron coding agent.
 Chat with the agent, select projects, approve commands, inspect file changes,
 review checks, and resume saved tasks without using a terminal interface.
 
-Version **0.4.0**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
+Version **0.5.0**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
 Python **3.11+** is required once; there are no third-party runtime packages.
 Launchers are included for Windows, macOS, and Linux.
 
-## Reliability update in 0.4.0
+## Simple explanations and project folders in 0.5.0
+
+- Problems now say **what happened, what it means, and what to do next**.
+  Long commands and tracebacks sit inside optional technical details.
+- **Try fixing it** resumes investigation. **Explain this simply** switches to
+  read-only Ask mode without asking you to understand programming errors.
+- If an agent-created test contains a mistaken assumption, the agent can record
+  a correction after reading source evidence and passing a replacement check.
+  Old failures and correction reasons remain visible. Required checks and
+  discovered project checks cannot be retired with this tool.
+- **What works and what is left** shows recorded evidence, untested features,
+  usage steps and limitations. Passed checks become stale after project edits.
+  The model describes feature coverage; the runtime derives check status.
+- New projects live in **SPARKLE-CODER/PROJECTS**. Settings live in **APP_DATA**.
+  Older managed projects and saved tasks are copied in, preserving the originals.
+- Repeated completion claims trigger another source inspection. The agent is
+  instructed to check the implementation and its test assumptions, and to run
+  independent checks separately so one failed assertion does not hide the rest.
+
+These changes target confusing failures and lost progress. They are not a claim
+of unique capabilities or better model accuracy than every other agent.
+
+## Reliability features retained from 0.4.0
 
 - Repairs continue while the project or check evidence changes; the old two/three
   completion-attempt cutoff is removed. Unchanged unsuccessful completion claims
@@ -30,11 +52,11 @@ The application is now named **SPARKLE CODER**. NVIDIA Nemotron remains the
 model family used for inference. The Python package is `sparkle_coder`;
 open `Open_SPARKLE_CODER.pyw`, the Windows/Linux launcher, or `SPARKLE_CODER.app`.
 
-Existing installations retain access to their original data folder, including
-chosen storage locations. Project state remains in `.nemotron/` and advanced
-configuration remains in `nemotron.toml` for compatibility. New installations
-use the SPARKLE CODER data directories listed below. Device storage can change
-the location after launch.
+The first default launch imports older managed data into this application folder,
+including data reached through an older chosen-storage pointer. Explicitly
+registered external project folders stay in place. Project state remains in
+`.nemotron/` and advanced configuration remains in `nemotron.toml`. Device
+storage can change the location after launch.
 
 ## Features introduced in 0.3
 
@@ -52,8 +74,9 @@ the location after launch.
   the original folder as a backup. The chosen location survives app restarts.
 
 See [WHAT_CHANGED.md](WHAT_CHANGED.md) for the controls and transfer limits.
-Quit the previous app before opening the updated launcher. Your existing
-registered projects remain available through the same local settings.
+Quit the previous app before opening the updated launcher. For future updates,
+replace the application files in this folder while keeping **PROJECTS** and
+**APP_DATA**. Use a writable location such as Documents.
 
 ## In the browser
 
@@ -162,10 +185,17 @@ available for validation here.
 
 | Data | Location |
 | --- | --- |
-| Windows settings and managed projects | `%LOCALAPPDATA%/SparkleCoder` |
-| macOS settings and managed projects | `~/Library/Application Support/SparkleCoder` |
-| Linux settings and managed projects | `$XDG_CONFIG_HOME/sparkle-coder`, otherwise `~/.config/sparkle-coder` |
+| New managed projects on Windows, macOS and Linux | `<SPARKLE-CODER application folder>/PROJECTS` |
+| App settings and launch state | `<SPARKLE-CODER application folder>/APP_DATA` |
 | Saved sessions, memory, and file backups | Each project's `.nemotron` folder |
+| An explicitly registered existing project | The folder you selected |
+
+The source launchers use the folder you extracted. Both **PROJECTS** contents
+and **APP_DATA** are ignored by this repository's Git settings. **Device storage
+→ Open PROJECTS folder** opens the actual location. If you explicitly choose
+another storage location later, new projects use its **PROJECTS** subfolder.
+Keep both folders when updating the app. An old check naming a previous project
+location must be corrected before it can run, so it cannot test the backup by mistake.
 
 Keep project session data out of Git: it can contain source code and task
 history. Existing projects are registered without rewriting their Git settings.
@@ -203,7 +233,8 @@ systems. This is a source app with desktop launchers, not a signed standalone
 installer or a mobile app.
 
 For contributors, run `python3 -m unittest discover -s tests -v`,
-`node tests/test_ui_client.js`, and `node --check sparkle_coder/ui/app.js`. The optional terminal interface
+`node tests/test_ui_client.js`, `node tests/test_ui_explanations.js`, and
+`node --check sparkle_coder/ui/app.js`. The optional terminal interface
 remains available in [CLI_REFERENCE.md](CLI_REFERENCE.md).
 
 ## Source map
@@ -222,6 +253,8 @@ remains available in [CLI_REFERENCE.md](CLI_REFERENCE.md).
 | sparkle_coder/provider.py | Model API transport and native/JSON tools |
 | sparkle_coder/tools.py | Model-facing project tools and memory |
 | sparkle_coder/checks.py | Read-only discovery of common project checks |
+| sparkle_coder/explanations.py | Plain-language error and recovery explanations |
+| sparkle_coder/verification.py | Check identities, correction history and evidence status |
 | sparkle_coder/workspace.py | File boundaries, hashes, atomic writes, locking |
 | sparkle_coder/execution.py | Command execution, cancellation, limits, Docker option |
 | sparkle_coder/state.py | Sessions, file journal, recovery, undo |

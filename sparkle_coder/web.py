@@ -13,7 +13,7 @@ import urllib.request
 from urllib.parse import parse_qs, quote, urlsplit
 import webbrowser
 
-from .webapp import AppService, default_app_dir
+from .webapp import AppService, default_app_dir, legacy_app_dirs
 from .files import UserFiles
 from . import __version__
 from .workspace import Redactor, write_json
@@ -183,6 +183,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/open-folder":
                 if body.get("project_id"):
                     folder = app.project(body["project_id"])[1].root
+                elif body.get("target") == "projects":
+                    folder = app.projects_directory
                 else:
                     folder = app.directory
                 if os.name == "nt":
@@ -252,9 +254,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     directory = args.state_dir.expanduser().resolve()
     instance = directory / "instance.json"
-    if not args.no_open and instance.exists() and not instance.is_symlink():
+    previous_instances = [instance]
+    if directory == default_app_dir():
+        previous_instances += [path / "instance.json" for path in legacy_app_dirs()]
+    for previous_instance in previous_instances if not args.no_open else []:
+        if not previous_instance.exists() or previous_instance.is_symlink():
+            continue
         try:
-            previous = json.loads(instance.read_text("utf-8"))
+            previous = json.loads(previous_instance.read_text("utf-8"))
             url = urlsplit(previous["origin"])
             if url.scheme == "http" and url.hostname == "127.0.0.1" and url.port:
                 request = urllib.request.Request(previous["origin"] + "/api/state",

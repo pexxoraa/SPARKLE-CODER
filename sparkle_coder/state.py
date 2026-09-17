@@ -7,6 +7,7 @@ import stat
 import uuid
 
 from .workspace import Workspace, WorkspaceError, atomic_write, sha256, write_json
+from .verification import identify_checks
 
 
 def now() -> str:
@@ -17,6 +18,12 @@ class Session:
     def __init__(self, workspace: Workspace, state: dict):
         self.workspace = workspace
         self.state = state
+        identify_checks(state)
+        previous = state.get("workspace_root")
+        if previous and previous != str(workspace.root):
+            state["previous_workspaces"] = list(dict.fromkeys(state.get("previous_workspaces", []) + [previous]))
+            state["verification_fingerprint"] = None
+        state["workspace_root"] = str(workspace.root)
         self.id = state["id"]
         self.directory = workspace.state_dir / "sessions" / self.id
         for p in (workspace.state_dir / "sessions", self.directory):
@@ -62,6 +69,7 @@ class Session:
         self.save()
 
     def mutate(self, relative: str, data: bytes | None, expected: str | None):
+        self.state["verification_fingerprint"] = None
         path = self.workspace.path(relative)
         exists = path.exists()
         before = path.read_bytes() if exists else None
@@ -150,5 +158,6 @@ class Session:
             restored.append(record["path"])
         self.state["undone"] = True
         self.state["status"] = "undone"
+        self.state["verification_fingerprint"] = None
         self.save()
         return restored

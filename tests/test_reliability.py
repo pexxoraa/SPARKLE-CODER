@@ -95,8 +95,9 @@ class RepairTests(unittest.TestCase):
         agent = self.agent([calls(("run_command", {"command": "npm run test"}))] +
                            [Completion("Please finish.", [], {}) for _ in range(4)], approve=lambda _: False)
         self.assertEqual(agent.run(), "needs_input")
-        self.assertIn("You denied", agent.session.state["recovery"]["message"])
-        self.assertFalse(agent.session.state["checks"])
+        self.assertIn("declined", agent.session.state["recovery"]["message"])
+        self.assertEqual(len(agent.session.state["checks"]), 1)
+        self.assertTrue(agent.session.state["checks"][0]["denied"])
 
     def test_ask_mode_is_enforced_and_finishes_without_build_checks(self):
         agent = self.agent([calls(("write_file", {"path": "should-not-exist", "content": "no"}),

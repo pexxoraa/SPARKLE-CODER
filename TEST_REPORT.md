@@ -1,11 +1,45 @@
-# Validation report — SPARKLE CODER 0.4.0
+# Validation report — SPARKLE CODER 0.5.0
 
 Validated on Linux with Python 3.12.14 on 2026-09-17.
 
-**93 automated Python tests passed. No failures, errors or skipped tests.**
+**111 automated Python tests passed. No failures, errors or skipped tests.**
 The complete output is in [TEST_RESULTS.txt](TEST_RESULTS.txt). The standalone
-JavaScript browser API-helper test also passed. Model responses were scripted;
+JavaScript browser API-helper and explanation-rendering tests also passed. Model responses were scripted;
 no live NVIDIA credentials or local inference server were available.
+
+## Plain explanations and PROJECTS workflows exercised
+
+- A dependency-free tokenizer fixture reproduces the exact “Expected vocab 36,
+  got 54” error in two check variants. Their explanation reports both counts
+  without assuming which is correct. A replacement derives its expectation from
+  sample data and special symbols, checks round trips and unknown characters,
+  and passes. Both original failures remain saved while completion uses the
+  corrected active check. This is a reproduction, not a test of the user's
+  unavailable PyTorch model files.
+- Unread or changed source evidence cannot retire a failed check. A failing
+  replacement preserves the original. User-required checks and discovered project
+  commands remain protected, including a later user requirement reinstating a
+  previously corrected command. Old sessions gain stable check IDs.
+- Repeated unsuccessful completion claims trigger source inspection and produce
+  a plain recovery summary, with raw scripts and tracebacks kept in details.
+  A declined command records its actual cause without repeating the approval.
+- Feature statuses use real check IDs. Invented IDs are rejected, untested
+  features remain untested, and edited files require fresh verification.
+  Opening a saved result detects later manual edits. Model-authored coverage
+  labels are not independently proven by these tests.
+- New managed projects use the application folder's PROJECTS directory. Migration
+  preserves saved tasks, original files and external registrations; follows an
+  older custom-storage pointer; avoids name collisions; and rolls back newly
+  copied destinations if a later copy fails. Retrying succeeds without changing
+  the originals. Moving selected storage includes sibling PROJECTS data, persists
+  across reopening, and rejects recursive destinations.
+- A migrated check cannot execute against its previous project folder. Old
+  failure snapshots receive simple recovery messages when reopened.
+- JavaScript DOM-double tests exercise actual rendering functions: technical
+  details start collapsed, the counts remain readable, follow-up actions preserve
+  typed requirements and choose Build/Ask correctly, busy runs cannot submit a
+  second task, correction history stays separate, and untested/stale evidence
+  never displays a passing feature label.
 
 ## Reliability workflows exercised
 
@@ -50,15 +84,15 @@ isolated local engine, serves its API, and shuts down cleanly on Linux.
 
 ## Source and package checks
 
-- JavaScript syntax passed. Static markup checks found 162 unique UI element IDs
+- JavaScript syntax passed. Static markup checks found 170 unique UI element IDs
   with no duplicates or missing literal JavaScript ID references.
 - `node tests/test_ui_client.js` exercised the actual browser API helper: a saved
   run error returns resumable run state, while failed HTTP requests and ordinary
   action errors still surface. This guards against endless polling of a failed run.
 - Python source parsed, Unix launcher shell syntax passed, and the macOS plist
-  identifies version 0.4.0 and its supplied executable.
+  identifies version 0.5.0 and its supplied executable.
 - The package built and installed into an isolated target with no downloads or
-  third-party runtime dependencies. Version 0.4.0, check-discovery code, all four
+  third-party runtime dependencies. Version 0.5.0, explanation/verification code, all four
   UI assets, and the desktop entry point were present.
 - Git whitespace checks passed. Temporary app state, test environments, package
   build products and credentials are excluded from the published source.
@@ -76,4 +110,5 @@ isolated local engine, serves its API, and shuts down cleanly on Linux.
   which software can actually be built and tested on a particular device.
 
 Reproduce: `python -m unittest discover -s tests -v`,
-`node tests/test_ui_client.js`, and `node --check sparkle_coder/ui/app.js`.
+`node tests/test_ui_client.js`, `node tests/test_ui_explanations.js`,
+and `node --check sparkle_coder/ui/app.js`.
