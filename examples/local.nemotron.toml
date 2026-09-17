@@ -1,0 +1,22 @@
+# Copy the settings you need into your project's nemotron.toml.
+# Start a compatible Nemotron model server separately.
+base_url = "http://127.0.0.1:8000/v1"
+model = "replace-with-the-model-id-returned-by-your-server"
+api_key_env = "LOCAL_MODEL_API_KEY"
+tool_format = "native"
+temperature = 1.0
+top_p = 0.95
+max_tokens = 16000
+context_chars = 120000
+max_steps = 40
+max_seconds = 1800
+max_total_tokens = 250000
+request_timeout = 180
+command_timeout = 120
+execution = "local"
+auto_approve = false
+verify = []
+# Keep {} for servers rejecting model-specific options.
+# For Nemotron 3 Super with compatible serving:
+# extra_body = { chat_template_kwargs = { force_nonempty_content = true } }
+extra_body = {}

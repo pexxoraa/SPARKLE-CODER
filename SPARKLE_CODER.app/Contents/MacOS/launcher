@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+launcher_dir=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
+PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH
+for python_bin in python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do
+    if "$python_bin" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+        exec "$python_bin" "$launcher_dir/Open_SPARKLE_CODER.pyw"
+    fi
+done
+osascript -e 'display alert "Python is needed" message "Install Python 3.11 or newer, then reopen SPARKLE CODER. See OPEN_FIRST.html in the extracted folder." as informational'
+open "$launcher_dir/OPEN_FIRST.html"
+exit 1

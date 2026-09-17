@@ -1,0 +1,146 @@
+# Open SPARKLE CODER
+
+Version **0.3.1** is a browser interface for your personal coding agent.
+Everyday use takes place in the browser: connect a model, select a project,
+describe work, approve commands, inspect files, and continue saved tasks.
+
+## Upgrading from the previous version
+
+Use **Quit app** in the old window before opening this updated launcher. Extract
+this version into a new application folder; do not overwrite a running app.
+Your registered projects and settings remain in their existing device data
+folder. SPARKLE CODER detects the earlier Nemotron Workspace storage location
+automatically, including its selected-folder pointer. The launcher detects a still-running older version and tells you to
+quit it before continuing.
+
+## First launch
+
+1. Extract the complete ZIP. Keep all its files together.
+2. Install **Python 3.11 or newer** once, if it is not already installed.
+   Use [python.org](https://www.python.org/downloads/) on Windows/macOS or your
+   Linux software manager. Windows users should include the Python launcher
+   and Python file associations. No agent dependencies or pip commands are needed.
+3. Open the launcher for your desktop:
+
+| Desktop | Launcher | Notes |
+| --- | --- | --- |
+| Windows | `Start_Windows.vbs` | Starts without a console window. If VBScript is unavailable, open `Open_SPARKLE_CODER.pyw` with Python. |
+| macOS | `SPARKLE_CODER.app` | Keep the app inside the extracted folder. This unsigned personal app may require approval through macOS Privacy & Security. |
+| Linux | `Start_Linux.sh` | In Properties → Permissions, allow executing as a program, then open it and choose Run. File-manager labels vary. |
+
+The launcher opens your default browser automatically. Reopening the launcher
+reconnects to an existing engine when one is already running. Closing a tab
+leaves the engine running; **Quit app** stops it.
+
+You can also open **OPEN_FIRST.html** for a graphical setup guide.
+These are source-app launchers, not signed standalone installers; Python is
+required. Windows and macOS launch behavior has not been tested here.
+
+## Choose your device data folder
+
+Open **Device storage** in the sidebar. Its field shows the current storage
+location. Use **Browse** or paste an absolute path to an empty folder, then
+click **Copy data and use this folder**. Your settings, managed projects,
+history, and logs move to the selected location by copying; the original stays
+as a backup. Existing projects outside that data folder stay where they are.
+Use **Open current folder** to inspect the saved files in your file manager.
+
+## Try it without a model key
+
+Click **Take it for a test run**. The app creates a separate demo project,
+writes a calculator and tests, and asks to run a syntax check. Choose
+**Allow once**. It then runs failing acceptance tests, fixes the arithmetic
+bug, and reruns the tests. Inspect **Run monitor**, **Changes**, and **Checks**. The demo opens the monitor;
+click **Review action** when its command needs approval.
+
+The demo uses clearly labeled scripted responses. File edits, command execution,
+test failures, repair, and passing checks are real. It does not call Nemotron.
+
+## Connect Nemotron
+
+Open **Connect Nemotron** in the sidebar.
+
+- **NVIDIA API:** obtain your key from the
+  [Nemotron model page](https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b),
+  enter it in the password field, and use the model ID your account can access.
+  Click **Test connection**, then **Save connection**. Hosted inference does
+  not require a GPU in this computer; selected project context goes to NVIDIA.
+- **Local or custom server:** enter the URL of an already running compatible
+  Nemotron server and its exact served model ID. A key is optional for an
+  unauthenticated local endpoint. Use **JSON fallback** only if your server
+  does not support native tool calls. The app does not install model weights
+  or start an inference server.
+
+The connection test checks access and model discovery. Your first real task
+also exercises generation and tool calls. A server must expose both
+`/v1/models` and `/v1/chat/completions` for the full workflow.
+
+Keys entered in the app are kept in memory, scoped to their endpoint, and
+cleared when the engine quits. Reenter them after restarting. Settings and
+project paths are saved; passwords are not. Do not put credentials in prompts.
+
+## Build something
+
+Click **+** beside the project selector. Give your project a name. Leave the
+folder blank for a new project, or use **Browse** to select an existing one.
+If the native chooser is unavailable, copy the absolute folder path from your
+file manager into the field.
+
+For a first real task, try:
+
+> Build a personal project tracker as a responsive web app. Support creating,
+> editing, and completing projects, save data locally, and include tests and
+> setup instructions. Inspect the folder first and explain your plan.
+
+Click **Run agent**. Approve commands after reviewing them. Required commands
+entered under **Checks** are authorized when you start the task and run
+automatically when the agent proposes completion. The agent can also propose
+its own checks. Read their results before relying on generated software.
+
+The **Files** page previews text files. **Changes** shows file-tool diffs.
+**Run history** lets you open a task and continue it with a follow-up message.
+**Stop** cancels commands and further actions; an in-flight model request may
+finish or time out first. **Undo** restores file-tool edits after checking for
+later manual changes. It cannot reverse shell commands or external actions.
+
+## Copy, import, download, and monitor
+
+In **Project files**:
+
+- Use **Import files**, **Import folder**, or drag/paste files onto the drop area.
+- Select a text file and choose **Copy text**, **Copy path**, **Duplicate**, or
+  **Download file**. Binary files support duplication and download.
+- Use **Download ZIP** for a project archive, or **Copy to folder** for a new
+  device-folder copy. Existing files are preserved, with new names for clashes.
+- Use **Open folder** for your normal file manager, including larger transfers.
+
+Open **Run monitor** while a task runs. It shows the current action, elapsed
+time, model calls, plan steps, checks, operation history, and live command output.
+**Pause** waits until the current operation finishes before blocking the next
+one. **Resume** releases it. **Stop** cancels commands and further actions.
+Use **Save report** and **Save log** to keep readable results and recorded events.
+
+**Review each file edit** is enabled for new real tasks. Inspect the proposed
+diff and choose Allow once or Deny. This controls agent file-tool edits;
+approved shell commands can also write files. Command review remains enabled.
+
+Imports and full-project exports require an idle engine. Transfers support
+20 MiB per file and 100 MiB per project export, with up to 3000 exported files.
+A browser import selection supports 500 files/100 MiB at a time. Exports exclude
+credentials, dependencies, Git internals, and agent history. Command logs are
+saved separately, up to 5 MiB per run; use Save log to export up to 20 MiB of
+combined task history. Open the device folder for larger copies.
+
+## Practical scope
+
+This version targets modern Windows, macOS, and Linux desktops. It is a local
+web app, so its interface uses a browser while Python runs the coding engine.
+It is not an Android/iOS app or a hosted service; phones cannot run this engine
+independently. The server only listens on the same computer by default.
+
+The agent can work with different languages and project types. Building and
+testing them requires their normal SDKs, compilers, dependencies, and any
+target hardware. It cannot guarantee every type of software or outperform
+other agents without task-specific evaluation.
+
+See **TEST_REPORT.md** for what was exercised and what still needs validation.
