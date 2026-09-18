@@ -4,9 +4,18 @@ A local browser app for your personal NVIDIA Nemotron coding agent.
 Chat with the agent, select projects, approve commands, inspect file changes,
 review checks, and resume saved tasks without using a terminal interface.
 
-Version **0.6.0**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
+Version **0.6.1**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
 Python **3.11+** is required once; there are no third-party runtime packages.
 Launchers are included for Windows, macOS, and Linux.
+
+## Startup repair in 0.6.1
+
+A missing old project folder no longer prevents the app from opening. Available
+projects still migrate into PROJECTS; missing entries retain their names and old
+paths. Choose **Find folder → Browse → Reconnect project** to select a moved or
+restored folder. Reconnecting uses existing files; it cannot restore deleted files.
+If all saved folders are unavailable, a separate new project opens so you can
+keep working. The app never silently recreates a missing registered folder.
 
 ## Guided work in 0.6.0
 

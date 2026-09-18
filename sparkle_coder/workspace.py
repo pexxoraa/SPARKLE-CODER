@@ -79,9 +79,13 @@ class Redactor:
 
 
 class Workspace:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, create: bool = True):
         self.root = root.expanduser().resolve()
-        self.root.mkdir(parents=True, exist_ok=True)
+        if create:
+            self.root.mkdir(parents=True, exist_ok=True)
+        elif not self.root.is_dir():
+            raise WorkspaceError(f"This project folder is unavailable: {self.root}. "
+                                 "Reconnect its drive or use Find folder to choose its current location.")
         self.state_dir = self.root / ".nemotron"
         if self.state_dir.is_symlink():
             raise WorkspaceError(".nemotron must not be a symlink.")

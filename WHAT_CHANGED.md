@@ -1,4 +1,19 @@
-# SPARKLE CODER 0.6.0 — guided work and honest completion
+# SPARKLE CODER 0.6.1 — open the app when an old project is missing
+
+Fixed the startup failure “Projects could not be moved ... The old project folder
+is missing.” Missing registrations keep their identity and original path while
+available managed projects and saved tasks are copied into PROJECTS. Existing
+folders and settings remain as backups. Real copy failures still stop migration
+and roll back copied projects before publishing new settings.
+
+The app selects an available project or creates a distinct new project when none
+are available. A plain notice offers **Find folder** to reconnect a moved or
+restored project without replacing its identity. Existing saved tasks in that
+folder become accessible again. Deleted files cannot be recovered by this action.
+Opening a missing registered project cannot silently recreate an empty folder.
+Switching device storage also preserves missing registrations at their old paths.
+
+## 0.6.0 — guided work and honest completion
 
 Open **Project brief** to save a purpose, a plain-language requirements checklist,
 and constraints. Each new task receives a snapshot; saved tasks retain theirs.

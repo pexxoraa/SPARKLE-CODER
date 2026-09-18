@@ -223,6 +223,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = app.file_action(parts[2], parts[3], body)
             elif len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] == "brief":
                 result = app.project_context(parts[2], body)
+            elif len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] == "reconnect":
+                result = app.reconnect_project(parts[2], body.get("path"))
             elif len(parts) == 4 and parts[:2] == ["api", "runs"]:
                 job = app.job(parts[2])
                 if parts[3] == "approval":

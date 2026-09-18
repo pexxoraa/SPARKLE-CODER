@@ -1,6 +1,6 @@
 # Open SPARKLE CODER
 
-Version **0.6.0** is a browser interface for your personal coding agent.
+Version **0.6.1** is a browser interface for your personal coding agent.
 Everyday use takes place in the browser: connect a model, select a project,
 describe work, approve commands, inspect files, and continue saved tasks.
 
@@ -18,6 +18,19 @@ tells you to quit it before continuing.
 
 For future updates, quit the app and replace its program files in this same
 folder. Keep **PROJECTS** and **APP_DATA**; they contain your work and settings.
+
+## If you saw “The old project folder is missing”
+
+This startup error is fixed in 0.6.1. Update the program files, keeping your old
+data folders, then open the launcher again. Available projects open normally.
+If all saved folders are missing, the app creates a separate new project.
+
+The notice at the top offers **Find folder**. Select your old project, choose
+**Browse**, find the folder containing its files, then select **Reconnect project**.
+If it was on another drive, connect that drive first. Saved tasks return only if
+the selected folder still contains their `.nemotron` history. If you cannot find
+the folder, use another project while looking for a backup. Reconnecting does
+not recover deleted files. You do not need to edit or delete any settings file.
 
 ## Set up a project in simple view
 

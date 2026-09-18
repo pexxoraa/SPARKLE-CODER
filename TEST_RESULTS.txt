@@ -68,6 +68,15 @@ test_new_install_creates_projects_inside_the_application (test_plain_experience.
 test_opening_old_failure_uses_simple_recovery_and_detects_later_manual_edits (test_plain_experience.PortableProjectsTests.test_opening_old_failure_uses_simple_recovery_and_detects_later_manual_edits) ... ok
 test_sibling_projects_move_with_selected_storage_and_remain_resumable (test_plain_experience.PortableProjectsTests.test_sibling_projects_move_with_selected_storage_and_remain_resumable) ... ok
 test_storage_cannot_copy_into_its_own_projects (test_plain_experience.PortableProjectsTests.test_storage_cannot_copy_into_its_own_projects) ... ok
+test_missing_current_project_is_not_recreated_by_open_or_add (test_project_recovery.ProjectRecoveryTests.test_missing_current_project_is_not_recreated_by_open_or_add) ... ok
+test_missing_entry_does_not_hide_real_copy_failure (test_project_recovery.ProjectRecoveryTests.test_missing_entry_does_not_hide_real_copy_failure) ... ok
+test_missing_entry_does_not_stop_other_projects_and_history_migrating (test_project_recovery.ProjectRecoveryTests.test_missing_entry_does_not_stop_other_projects_and_history_migrating) ... ok
+test_reconnect_requires_existing_folder_and_preserves_registration_on_failure (test_project_recovery.ProjectRecoveryTests.test_reconnect_requires_existing_folder_and_preserves_registration_on_failure) ... ok
+test_reconnecting_moved_project_keeps_identity_files_and_task_history (test_project_recovery.ProjectRecoveryTests.test_reconnecting_moved_project_keeps_identity_files_and_task_history) ... ok
+test_restoring_original_folder_updates_availability_without_new_registration (test_project_recovery.ProjectRecoveryTests.test_restoring_original_folder_updates_availability_without_new_registration) ... ok
+test_screenshot_missing_legacy_default_opens_without_recreating_it (test_project_recovery.ProjectRecoveryTests.test_screenshot_missing_legacy_default_opens_without_recreating_it) ... ok
+test_storage_move_keeps_missing_paths_and_copies_available_work (test_project_recovery.ProjectRecoveryTests.test_storage_move_keeps_missing_paths_and_copies_available_work) ... ok
+test_recovery_http_workflow_and_authentication (test_project_recovery.ProjectRecoveryWebTests.test_recovery_http_workflow_and_authentication) ... ok
 test_duplicate_tool_ids_are_rejected (test_provider.ProviderTests.test_duplicate_tool_ids_are_rejected) ... ok
 test_http_auth_error_is_actionable (test_provider.ProviderTests.test_http_auth_error_is_actionable) ... ok
 test_json_fallback_roundtrip_for_chat_only_servers (test_provider.ProviderTests.test_json_fallback_roundtrip_for_chat_only_servers) ... ok
@@ -128,6 +137,6 @@ test_undo_checks_all_conflicts_before_writing (test_workspace.WorkspaceTests.tes
 test_undo_restores_original_and_removes_new_file (test_workspace.WorkspaceTests.test_undo_restores_original_and_removes_new_file) ... ok
 
 ----------------------------------------------------------------------
-Ran 128 tests in 20.015s
+Ran 137 tests in 11.591s
 
 OK

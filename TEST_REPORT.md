@@ -1,15 +1,41 @@
-# Validation report — SPARKLE CODER 0.6.0
+# Validation report — SPARKLE CODER 0.6.1
 
 Validated on Linux with Python 3.12.14 on 2026-09-18.
 
-**128 automated Python tests passed, with no failures, errors, or skips.**
-The complete output is in [TEST_RESULTS.txt](TEST_RESULTS.txt). Both JavaScript
-scripts passed: `tests/test_ui_client.js` and `tests/test_ui_explanations.js`.
+**137 automated Python tests passed, with no failures, errors, or skips.**
+The complete output is in [TEST_RESULTS.txt](TEST_RESULTS.txt). All three JavaScript
+scripts passed: `tests/test_ui_client.js`, `tests/test_ui_explanations.js`, and
+`tests/test_ui_project_recovery.js`.
 Model replies in tests are scripted; no live NVIDIA key or inference server was available.
 
-## New guided-work workflows
+## Startup and missing-folder repair
 
-Seventeen new Python tests exercise the following behavior:
+Nine new Python tests reproduce and verify the startup repair:
+
+- A legacy registration pointing to a missing `Projects/my-project` folder opens
+  successfully. Its ID, name, and original path survive. Original settings remain
+  byte-for-byte intact. A distinct new project opens, and restarting does not
+  create repeated fallback projects.
+- Available projects and saved tasks migrate despite missing managed or external
+  folders. Real copy failures still abort, preserve originals, and remain retryable.
+- Reading or re-adding a missing registered folder cannot silently recreate it.
+  Availability updates when its drive or original folder returns.
+- Reconnecting a moved folder preserves its project ID, files, saved task history,
+  and previous path. Check evidence from the old location becomes stale.
+- Invalid, missing, duplicate, locked, and active-task reconnect attempts are
+  rejected. A settings-write failure restores the in-memory registration.
+- Changing device storage copies available work while preserving missing paths.
+- Local HTTP startup state, file and history reads, and reconnection work together.
+  The reconnect route rejects requests without a token or from another origin.
+
+The recovery UI script exercises the actual notice, missing-project selection,
+inline error, active-task guard, and successful reconnection functions with a DOM
+double. The screenshot's filesystem condition was reproduced in temporary test
+folders; the user's original device folders are not accessible here.
+
+## Guided-work workflows retained from 0.6.0
+
+Seventeen Python tests exercise the following behavior:
 
 - A saved brief supplies requirements to new tasks. Later brief edits do not
   remove requirements from saved tasks. Concurrent edits reject stale revisions.
@@ -55,11 +81,11 @@ finding tools from verifying software. They do not validate visual layout.
 ## Static and packaging checks
 
 - Python source/test AST parsing and JavaScript syntax checks passed.
-- 186 generated UI IDs are unique; no literal ID references are missing.
+- 199 UI IDs, including the HTML shell, are unique; no literal ID references are missing.
 - Linux and macOS launcher shell syntax and macOS plist version checks passed.
 - An offline package build and isolated install succeeded with no runtime
   dependencies. Installed source and UI files match the validated source.
-- The installed 0.6.0 package imports successfully in isolated Python.
+- The installed 0.6.1 package imports successfully in isolated Python.
 - `git diff --check` passed.
 
 ## Remaining limits

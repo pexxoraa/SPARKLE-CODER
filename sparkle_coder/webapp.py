@@ -123,6 +123,15 @@ class AppService:
             self.save()
         if not self.data["projects"]:
             self.add_project("My project", str(self.projects_directory / "my-project"))
+        else:
+            available = [p for p in self.data["projects"] if Path(p["path"]).is_dir()]
+            if not available:
+                # Use a distinct new folder; never recreate a missing project's
+                # path and silently present its empty history as recovered work.
+                self.add_project("New project")
+            elif self.data["selected_project"] not in {p["id"] for p in available}:
+                self.data["selected_project"] = available[0]["id"]
+                self.save()
 
     def save(self):
         # Deliberately excludes API keys and run access tokens.
@@ -193,9 +202,10 @@ class AppService:
         root = Path(path).expanduser()
         if not root.is_absolute():
             raise ValueError("Use an absolute project folder path, or leave it blank to create a project.")
-        workspace = Workspace(root)
+        root = root.resolve()
         with self.lock:
-            existing = next((p for p in self.data["projects"] if p["path"] == str(workspace.root)), None)
+            existing = next((p for p in self.data["projects"] if Path(p["path"]).resolve() == root), None)
+            workspace = Workspace(root, create=existing is None)
             if existing:
                 self.data["selected_project"] = existing["id"]
                 self.save()
@@ -211,7 +221,45 @@ class AppService:
             project = next((p for p in self.data["projects"] if p["id"] == project_id), None)
             if not project:
                 raise ValueError("Project not found.")
-            return project, Workspace(Path(project["path"]))
+            return project, Workspace(Path(project["path"]), create=False)
+
+    def reconnect_project(self, project_id, path):
+        if not isinstance(path, str) or not path.strip() or len(path) > 2000:
+            raise ValueError("Choose the existing folder that contains your project files.")
+        root = Path(path).expanduser()
+        if not root.is_absolute():
+            raise ValueError("Use Browse or paste the full, absolute folder path.")
+        root = root.resolve()
+        with self.lock:
+            if self.active():
+                raise ValueError("Finish or stop the active task before reconnecting a project.")
+            project = next((p for p in self.data["projects"] if p["id"] == project_id), None)
+            if not project:
+                raise ValueError("Project not found.")
+            if Path(project["path"]).is_dir() and root != Path(project["path"]).resolve():
+                raise ValueError("This project is already available. Refresh the app to open it.")
+            if any(p["id"] != project_id and Path(p["path"]).resolve() == root for p in self.data["projects"]):
+                raise ValueError("That folder is already listed as another project. Select that project instead.")
+            workspace = Workspace(root, create=False)
+            with workspace.lock():
+                original = project["path"]
+                previous_selected = self.data["selected_project"]
+                previous_paths = project.get("previous_paths")
+                if str(root) != original:
+                    project["previous_paths"] = list(dict.fromkeys((previous_paths or []) + [original]))
+                project["path"] = str(root)
+                self.data["selected_project"] = project_id
+                try:
+                    self.save()
+                except Exception:
+                    project["path"] = original
+                    if previous_paths is None:
+                        project.pop("previous_paths", None)
+                    else:
+                        project["previous_paths"] = previous_paths
+                    self.data["selected_project"] = previous_selected
+                    raise
+            return {**project, "available": True}
 
     def active(self):
         with self.lock:
@@ -221,7 +269,8 @@ class AppService:
     def state(self):
         with self.lock:
             job = self.active()
-            return {"version": __version__, "projects": list(self.data["projects"]),
+            return {"version": __version__, "projects": [
+                        {**p, "available": Path(p["path"]).is_dir()} for p in self.data["projects"]],
                     "experience": self.data["experience"],
                     "selected_project": self.data["selected_project"],
                     "settings": self.public_settings(), "active_run": job.public() if job else None,

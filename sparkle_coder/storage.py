@@ -34,7 +34,9 @@ def migrate_legacy(bootstrap, projects_root, candidates):
                 if not old.is_relative_to(source) and not old.is_relative_to(managed_root):
                     continue  # Explicitly registered external projects stay where the user put them.
                 if not old.is_dir():
-                    raise ValueError(f"The old project folder is missing: {old}")
+                    # A stale registration is not a failed copy. Keep its ID and
+                    # original path so the user can reconnect it after startup.
+                    continue
                 if bootstrap.parent.is_relative_to(old) or projects_root.is_relative_to(old):
                     raise ValueError("Place the SPARKLE CODER app folder outside the old project before copying it.")
                 if (old / ".nemotron").is_symlink() or (old / ".nemotron" / "workspace.lock").exists():
@@ -60,8 +62,12 @@ def migrate_legacy(bootstrap, projects_root, candidates):
                 project["previous_paths"] = list(dict.fromkeys(project.get("previous_paths", []) + [str(old)]))
                 project["path"] = str(destination)
             data["projects_path"] = str(projects_root)
-            data["storage_migration"] = {"from": str(source), "message":
-                "Your managed projects and saved tasks were copied into PROJECTS. The original folders were kept as backups."}
+            missing = [p["id"] for p in data.get("projects", []) if not Path(p["path"]).is_dir()]
+            message = f"{len(moved)} project folder(s) copied into PROJECTS. The original folders were kept as backups."
+            if missing:
+                message += (f" {len(missing)} saved project folder(s) could not be found. Their names and paths were kept. "
+                            "Use Find folder to reconnect them, or keep working in another project.")
+            data["storage_migration"] = {"from": str(source), "missing_project_ids": missing, "message": message}
             write_json(bootstrap / "settings.json", data)
     except Exception as exc:
         for path in reversed(moved):
@@ -104,25 +110,29 @@ def relocate(app, path):
         if item.name == "workspace.lock":
             raise ValueError("A project is locked. Finish its other run before relocating data.")
     data = json.loads(json.dumps(app.data))
+    copies = []
     for project in data["projects"]:
         source = Path(project["path"])
+        if not source.is_dir():
+            continue  # Keep unavailable registrations pointing to their original folders.
         if source.is_relative_to(old):
             project["path"] = str(destination / source.relative_to(old))
         elif source.is_relative_to(projects_root):
             project["path"] = str(destination / "PROJECTS" / source.relative_to(projects_root))
         if project["path"] != str(source):
             project["previous_paths"] = list(dict.fromkeys(project.get("previous_paths", []) + [str(source)]))
+            copies.append((source, Path(project["path"])))
     try:
         shutil.copytree(old, destination, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns("instance.json", "storage-location.json", "launcher.log"))
         if not projects_root.is_relative_to(old) and projects_root.exists():
-            for project in app.data["projects"]:
-                source = Path(project["path"])
+            for source, target in copies:
                 if source.is_relative_to(projects_root):
-                    target = destination / "PROJECTS" / source.relative_to(projects_root)
                     if (source / ".nemotron" / "workspace.lock").exists():
                         raise ValueError("A project is locked. Finish its other run before moving it.")
                     shutil.copytree(source, target, symlinks=True)
+        if any(not target.is_dir() for _, target in copies):
+            raise ValueError("A project folder became unavailable while copying. Reconnect its drive and try again.")
         data["projects_path"] = str(destination / "PROJECTS")
         write_json(destination / "settings.json", data)
         # This pointer is the commit: the old data remains intact if copying fails.
