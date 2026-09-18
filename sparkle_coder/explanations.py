@@ -2,7 +2,7 @@
 
 import re
 
-from .verification import active_checks
+from .verification import active_checks, proof_summary
 
 
 def check_title(command):
@@ -91,6 +91,13 @@ def explain_checks(state):
         else:
             issues.append(item)
     if not issues:
+        pending = [item for item in proof_summary(state)["requirements"] if item["status"] != "passed"]
+        if pending:
+            return [{"title": "Some of your requirements still need checking", "kind": "requirements",
+                     "can_auto_fix": True, "what_happened": f"{len(pending)} of your saved requirements lack current passing evidence.",
+                     "meaning": "Passing other checks does not establish that these requested features work.",
+                     "next_step": "Choose Try fixing it. SPARKLE CODER will work through the remaining requirements and link the results.",
+                     "check_ids": [], "technical_details": "\n".join(item["text"] for item in pending)}]
         issues.append({"title": "The work still needs a check", "kind": "no_evidence", "can_auto_fix": True,
                        "what_happened": "The agent has not shown that the current project passes its checks.",
                        "meaning": "The files are saved. A completed message alone is not proof that the software works.",

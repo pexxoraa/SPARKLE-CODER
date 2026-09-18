@@ -192,7 +192,9 @@ class ImprovementTests(unittest.TestCase):
         self.api('/api/runs/' + run['id'] + '/approval', {'approval_id': waiting['approval']['id'], 'allow': False})
         finished = self.await_run(run['id'], {'needs_input'})
         self.assertFalse(self.api(self.prefix() + '/files')['files'])
-        self.assertFalse(finished['session']['actions'][0]['ok'])
+        edits = [item for item in finished['session']['actions'] if item['tool'] == 'write_file']
+        self.assertEqual(len(edits), 1)
+        self.assertFalse(edits[0]['ok'])
 
     def test_pause_after_model_response_blocks_the_next_action_until_resume(self):
         gate = threading.Event()

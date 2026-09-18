@@ -1,14 +1,15 @@
 # Open SPARKLE CODER
 
-Version **0.5.0** is a browser interface for your personal coding agent.
+Version **0.6.0** is a browser interface for your personal coding agent.
 Everyday use takes place in the browser: connect a model, select a project,
 describe work, approve commands, inspect files, and continue saved tasks.
 
 ## Upgrading from the previous version
 
-Use **Quit app** in the old window before opening this updated launcher. Extract
-this version into a new application folder; do not overwrite a running app.
-On first launch, SPARKLE CODER detects the earlier SPARKLE CODER or Nemotron
+Use **Quit app** in the old window before opening this updated launcher. For
+0.5.x and later, update the program files in the same writable application folder
+and preserve **PROJECTS** and **APP_DATA**. Do not overwrite a running app.
+When upgrading an older installation, SPARKLE CODER detects the earlier SPARKLE CODER or Nemotron
 Workspace data folder, including an older selected-folder pointer. It copies
 managed projects and saved tasks into **PROJECTS** inside this application folder.
 Original folders stay as backups. Projects you registered from external folders
@@ -17,6 +18,28 @@ tells you to quit it before continuing.
 
 For future updates, quit the app and replace its program files in this same
 folder. Keep **PROJECTS** and **APP_DATA**; they contain your work and settings.
+
+## Set up a project in simple view
+
+1. Select or create your project. Open **Project brief** in the sidebar.
+2. Describe its purpose and list what must work, one requirement per line.
+   Save the brief. No test commands are needed here.
+3. Open **Check setup**. It shows tools found, missing setup, and items that
+   still need testing. **Help with setup** starts a Build request; commands still
+   require approval. A scan itself never installs or tests anything.
+4. Start a **New task**, describe the work, and choose **Run agent**. The task
+   gets a copy of the brief. Saved tasks retain their original requirements.
+5. Review **Your requirements** and **What works and what is left**. A passing
+   command only proves the behavior it tests. The agent's coverage links need review.
+
+Use the details button at the top right for activity, file changes, and checks.
+**Switch to advanced view** keeps that panel open on a large screen. Your choice
+is saved with app settings on your device. Stop and approval controls remain
+available in both views.
+
+If repeated attempts fail, open **What SPARKLE investigated**. It lists fresh
+source inspections and the next investigation. You can still use **Try fixing it**
+or **Explain this simply**; no programming knowledge is required to read the summary.
 
 ## First launch
 

@@ -20,7 +20,7 @@ const visibleText = element => element.hidden ? "" : element.text + " " + (eleme
 let working=false, submissions=0, settingsOpened=0;
 id("taskForm").requestSubmit=()=>submissions++;
 const ui = new Function("id","node","friendly","busy","openSettings","action","api","setTab","document",
-  "let currentSession=null; const projectId='project';\n" + functions + "\nreturn {renderRecovery,renderDelivery,checkCard,renderChecks,setSession:s=>currentSession=s};")(
+  "let currentSession=null; const projectId='project';\n" + functions + "\nreturn {renderRecovery,renderDelivery,renderRepairHistory,checkCard,renderChecks,setSession:s=>currentSession=s};")(
   id,node,s=>s,()=>working,()=>settingsOpened++,fn=>fn(),async()=>({}),()=>{}, {body:{classList:{add(){}}}});
 
 const recovery={title:"The vocabulary count does not match the test",what_happened:"The test expected 36 text symbols, but the program counted 54.",
@@ -73,4 +73,28 @@ assert.match(visibleText(delivery),/Open the project folder/);
 assert.doesNotMatch(visibleText(delivery),/Check passed/);
 ui.renderDelivery(null);
 assert.equal(delivery.hidden,true);
-console.log("Explanation UI: plain errors, collapsed technical details, safe follow-up modes, correction history and evidence states passed.");
+
+ui.renderDelivery({proof:{total:0,requirements_passed:0,requirements:[{text:"Keep data after restart",status:"not_checked"}]}});
+assert.equal(delivery.hidden,false);
+assert.match(visibleText(delivery),/Keep data after restart/);
+assert.match(visibleText(delivery),/0 of 1 have passing evidence/);
+assert.match(visibleText(delivery),/Not checked yet/);
+ui.renderRepairHistory({repair_history:[{what_happened:"The result differs",next_step:"Inspect the source",files:["calculator.py"],missing_requirements:["Preserve data"]}]});
+assert.equal(id("repairPanel").hidden,false);
+assert.match(visibleText(id("repairPanel")),/1 reviews/);
+id("repairPanel").children[0].open=true;
+assert.match(visibleText(id("repairPanel")),/calculator.py/);
+assert.match(visibleText(id("repairPanel")),/Preserve data/);
+ui.renderRepairHistory(null);
+assert.equal(id("repairPanel").hidden,true);
+
+const setupSource=source.slice(source.indexOf("function renderSetupReport("),source.indexOf("async function refreshSetup("));
+const renderSetupReport=new Function("id","node",setupSource+";return renderSetupReport;")(id,node);
+renderSetupReport({attention:1,items:[{id:"tool:node",title:"Node.js",status:"attention",detail:"Not found on PATH",next_step:"Install Node.js and reopen"}],
+  overview:{file_count:3,scan_truncated:false,languages:{JavaScript:2},manifests:["package.json"],entry_points:["index.html"]},checks:[{cwd:".",command:"npm run test"}]});
+assert.match(id("setupSummary").textContent,/1 setup item/);
+assert.match(visibleText(id("setupItems")),/Install Node.js/);
+assert.match(id("setupMap").textContent,/Candidate checks \(not executed\)/);
+renderSetupReport({attention:0,items:[],overview:{file_count:0,languages:{},manifests:[],entry_points:[]},checks:[]});
+assert.match(id("setupSummary").textContent,/tests still need to run/);
+console.log("Explanation UI: plain recovery, requirement evidence, repair history, and setup statuses passed.");

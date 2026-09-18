@@ -1,4 +1,30 @@
-# SPARKLE CODER 0.5.0 — simple explanations and PROJECTS
+# SPARKLE CODER 0.6.0 — guided work and honest completion
+
+Open **Project brief** to save a purpose, a plain-language requirements checklist,
+and constraints. Each new task receives a snapshot; saved tasks retain theirs.
+Open **Check setup** for a read-only inspection of project manifests and available
+tools. It does not execute commands, install packages, or claim test success.
+
+The result panel now includes your saved requirements and their check evidence.
+Completion requires passing evidence for every saved requirement and every active
+recorded/discovered check. A passing required command cannot hide another failure.
+The agent supplies coverage links; the runtime validates IDs, results, and freshness.
+
+Environment commands invalidate old evidence even when only an ignored dependency
+folder changes. Repeated unsuccessful checks or completion claims trigger a source
+and setup review. **What SPARKLE investigated** lists the inspected files and next
+investigation. Repairs can still stall; failures are never converted into passes.
+
+Simple view is the default, with optional activity details and the full Run monitor.
+The sidebar switches to advanced view. This preference is saved with device app
+settings. Approval, Stop, files, downloads, and PROJECTS storage are retained.
+Node check discovery now respects an explicit packageManager declaration.
+
+This is Stage 1 of the agreed expansion. Live preview, browser tests, parallel
+agents, a GitHub interface, document tools, plugins, schedules, voice, and remote
+access remain planned. See ROADMAP.md and TEST_REPORT.md.
+
+## Retained from 0.5.0 — simple explanations and PROJECTS
 
 The recovery screen explains what happened, what it means and the next action.
 Commands and tracebacks are collapsed under optional details. **Try fixing it**

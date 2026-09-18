@@ -6,6 +6,7 @@ import re
 import uuid
 
 from .checks import discover_checks
+from .diagnostics import inspect_setup
 from .explanations import check_title, explain_failure
 from .execution import CommandRunner
 from .state import Session, now
@@ -22,6 +23,8 @@ def schema(name, description, properties, required=()):
 S = {"type": "string"}
 I = {"type": "integer"}
 SCHEMAS = [
+    schema("inspect_setup", "Inspect project manifests and locate development tools without executing code. "
+           "Use to investigate missing dependencies; this is not a verification pass.", {}),
     schema("discover_checks", "Find existing test, typecheck, lint and build commands. Does not execute them.", {}),
     schema("request_input", "Ask the user for a specific missing decision, credential setup, or unavailable dependency "
            "only after useful work is exhausted. Include the exact next step; work will be saved.",
@@ -57,7 +60,9 @@ SCHEMAS = [
            "the runtime derives pass/fail status, not your prose. An empty check_ids list means not checked.",
            {"summary": S, "how_to_use": {"type": "array", "items": S},
             "limitations": {"type": "array", "items": S}, "features": {"type": "array", "items": {
-                "type": "object", "properties": {"feature": S, "check_ids": {"type": "array", "items": S}},
+                "type": "object", "properties": {"feature": S, "check_ids": {"type": "array", "items": S},
+                    "requirement_ids": {"type": "array", "items": S,
+                        "description": "IDs from the user-owned requirements checkpoint covered by this feature."}},
                 "required": ["feature", "check_ids"], "additionalProperties": False}}},
            ["summary", "how_to_use", "limitations", "features"]),
     schema("update_plan", "Maintain a short execution checklist. Preserve the user's task and acceptance criteria.",
@@ -155,6 +160,11 @@ class ToolSet:
     def discover_checks(self):
         return discover_checks(self.workspace, self.runner.config.execution)
 
+    def inspect_setup(self):
+        report = inspect_setup(self.workspace, self.runner.config)
+        self.session.state["setup"] = self.redactor.value(report)
+        return report
+
     def request_input(self, question, next_step):
         if not question.strip() or not next_step.strip():
             raise ValueError("Give a specific question and a next step.")
@@ -216,6 +226,7 @@ class ToolSet:
         result = self.runner.run(command, cwd, timeout)
         if result.get("exit_code") is not None:
             self.session.state["verification_fingerprint"] = None
+            self.session.state["environment_revision"] = self.session.state.get("environment_revision", 0) + 1
         return result
 
     def verify(self, command, cwd=".", timeout=None, label="", *, trusted=False, source=None):
@@ -239,6 +250,7 @@ class ToolSet:
                   "cancelled": result.get("cancelled", False),
                   "timed_out": result.get("timed_out", False),
                   "fingerprint": self.workspace.fingerprint(),
+                  "environment_revision": self.session.state.get("environment_revision", 0),
                   "output": result.get("output", "")[-12000:]}
         self.session.state["checks"].append(self.redactor.value(record))
         self.session.state["verification_fingerprint"] = record["fingerprint"]
@@ -298,13 +310,19 @@ class ToolSet:
                 raise ValueError("Use up to 12 short, plain-language items.")
         identify_checks(self.session.state)
         known = {c["id"] for c in self.session.state["checks"]}
+        requirements = {item["id"] for item in self.session.state.get("requirements", [])}
         if len(features) > 20:
             raise ValueError("Summarize up to 20 features.")
         for item in features:
-            if (not isinstance(item, dict) or set(item) != {"feature", "check_ids"}
+            if (not isinstance(item, dict) or not {"feature", "check_ids"} <= set(item)
+                    or set(item) - {"feature", "check_ids", "requirement_ids"}
                     or not isinstance(item["feature"], str) or not 1 <= len(item["feature"]) <= 300
                     or not isinstance(item["check_ids"], list)
-                    or any(not isinstance(key, str) or key not in known for key in item["check_ids"])):
+                    or len(item["check_ids"]) > 40
+                    or any(not isinstance(key, str) or key not in known for key in item["check_ids"])
+                    or not isinstance(item.get("requirement_ids", []), list)
+                    or len(item.get("requirement_ids", [])) > 20
+                    or any(not isinstance(key, str) or key not in requirements for key in item.get("requirement_ids", []))):
                 raise ValueError("Each feature needs plain text and existing check IDs, or an empty list if not tested.")
         self.session.state["delivery"] = self.redactor.value({"summary": summary, "how_to_use": how_to_use,
                                                              "limitations": limitations, "features": features})
@@ -341,4 +359,4 @@ class ToolSet:
         return {"saved": key}
 
 
-READ_ONLY_TOOLS = {"list_files", "read_file", "search_files", "discover_checks", "request_input", "update_plan"}
+READ_ONLY_TOOLS = {"list_files", "read_file", "search_files", "discover_checks", "inspect_setup", "request_input", "update_plan"}

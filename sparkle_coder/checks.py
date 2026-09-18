@@ -9,8 +9,17 @@ import subprocess
 import sys
 
 
-def discover_checks(workspace, execution="local"):
-    files = workspace.files(limit=10001)
+def package_manager(data, names, root="."):
+    declared = data.get("packageManager", "") if isinstance(data, dict) else ""
+    if isinstance(declared, str) and declared.split("@")[0] in ("npm", "pnpm", "yarn", "bun"):
+        return declared.split("@")[0]
+    prefix = "" if root == "." else root + "/"
+    return next((manager for lock, manager in (("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"),
+                ("bun.lock", "bun"), ("bun.lockb", "bun")) if prefix + lock in names), "npm")
+
+
+def discover_checks(workspace, execution="local", *, files=None):
+    files = workspace.files(limit=10001) if files is None else files
     names = set(files)
     manifests = {"package.json", "pyproject.toml", "pytest.ini", "setup.cfg", "Cargo.toml", "go.mod"}
     roots = {"."}
@@ -35,6 +44,7 @@ def discover_checks(workspace, execution="local"):
         prefix = "" if root == "." else root + "/"
         manifest = prefix + "package.json"
         if manifest in names:
+            data = {}
             try:
                 data = json.loads(read(manifest))
                 scripts = data.get("scripts", {}) if isinstance(data, dict) else {}
@@ -42,9 +52,7 @@ def discover_checks(workspace, execution="local"):
                     scripts = {}
             except ValueError:
                 scripts = {}
-            manager = next((manager for lock, manager in (
-                ("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"),
-                ("bun.lock", "bun"), ("bun.lockb", "bun")) if prefix + lock in names), "npm")
+            manager = package_manager(data, names, root)
             for key in ("typecheck", "type-check", "check", "lint", "test", "build"):
                 script = scripts.get(key)
                 if not isinstance(script, str) or not script.strip():

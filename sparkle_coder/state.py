@@ -8,6 +8,7 @@ import uuid
 
 from .workspace import Workspace, WorkspaceError, atomic_write, sha256, write_json
 from .verification import identify_checks
+from .brief import read_brief, task_requirements
 
 
 def now() -> str:
@@ -33,6 +34,7 @@ class Session:
 
     @classmethod
     def create(cls, workspace: Workspace, goal: str, verify: list[str], model: dict):
+        brief = read_brief(workspace)["brief"]
         session = cls(workspace, {
             "version": 1, "id": uuid.uuid4().hex[:12], "created": now(),
             "goal": goal, "user_requests": [goal], "status": "running", "model": model, "required_checks": verify,
@@ -40,6 +42,7 @@ class Session:
             "plan": [], "actions": [], "journal": [], "checks": [],
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "calls": 0},
             "summary": "",
+            "project_brief": brief, "requirements": task_requirements(brief), "repair_history": [],
         })
         session.save()
         return session

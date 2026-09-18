@@ -12,6 +12,8 @@ from urllib.parse import urlsplit
 from . import __version__
 from .agent import Agent
 from .config import Config, load_config
+from .brief import read_brief, save_brief
+from .diagnostics import inspect_setup
 from .demo import DemoProvider, calls, python_command
 from .provider import NemotronClient
 from .monitor import Run, ACTIVE, session_events
@@ -79,7 +81,7 @@ class AppService:
             raise ValueError("Application settings must not be a symlink.")
         defaults = {key: getattr(Config(), key) for key in SETTINGS}
         self.data = {"settings": defaults, "projects": [], "selected_project": None,
-                     "settings_version": SETTINGS_SCHEMA_VERSION}
+                     "settings_version": SETTINGS_SCHEMA_VERSION, "experience": "simple"}
         self.projects_directory = (application_root() / "PROJECTS" if portable and self.directory == self.bootstrap
                                    else self.directory / "PROJECTS")
         migrated = False
@@ -88,6 +90,8 @@ class AppService:
             self.data["settings"].update({k: v for k, v in saved.get("settings", {}).items() if k in SETTINGS})
             self.data["projects"] = saved.get("projects", [])
             self.data["selected_project"] = saved.get("selected_project")
+            if saved.get("experience") in ("simple", "advanced"):
+                self.data["experience"] = saved["experience"]
             if saved.get("projects_path"):
                 selected_projects = Path(saved["projects_path"])
                 if not selected_projects.is_absolute():
@@ -218,10 +222,39 @@ class AppService:
         with self.lock:
             job = self.active()
             return {"version": __version__, "projects": list(self.data["projects"]),
+                    "experience": self.data["experience"],
                     "selected_project": self.data["selected_project"],
                     "settings": self.public_settings(), "active_run": job.public() if job else None,
                     "storage": {"path": str(self.directory), "projects_path": str(self.projects_directory),
                                 "migration": self.data.get("storage_migration")}}
+
+    def experience(self, value):
+        if value not in ("simple", "advanced"):
+            raise ValueError("Choose the simple or advanced view.")
+        with self.lock:
+            self.data["experience"] = value
+            self.save()
+        return {"experience": value}
+
+    def project_context(self, project_id, payload=None):
+        with self.lock:
+            _, workspace = self.project(project_id)
+            redactor = Redactor((self.config(workspace).api_key,))
+            if payload is None:
+                return redactor.value(read_brief(workspace))
+            if not isinstance(payload, dict) or set(payload) != {"brief", "revision"}:
+                raise ValueError("Provide the brief and its current revision.")
+            if self.active():
+                raise ValueError("Wait for the running task or stop it before changing the project brief.")
+            with workspace.lock():
+                return save_brief(workspace, redactor.value(payload["brief"]), payload["revision"])
+
+    def setup(self, project_id):
+        _, workspace = self.project(project_id)
+        config = self.config(workspace)
+        report = inspect_setup(workspace, config,
+                               self.connected_endpoint == (config.base_url, config.model))
+        return Redactor((config.api_key,)).value(report)
 
     def snapshot(self, project_id, session_id, include_events=True):
         _, workspace = self.project(project_id)
@@ -251,7 +284,8 @@ class AppService:
                    "explanation": explain_failure(check) if not check["ok"] else None}
                   for check in state["checks"][-60:]]
         return {key: state.get(key) for key in
-                ("id", "goal", "status", "created", "updated", "plan", "usage", "summary", "model", "undone", "task_mode", "recovery")} | {
+                ("id", "goal", "status", "created", "updated", "plan", "usage", "summary", "model", "undone", "task_mode", "recovery",
+                 "project_brief", "requirements", "setup", "repair_history")} | {
             "messages": messages, "actions": state["actions"][-100:], "checks": checks,
             "recovery": recovery, "proof": proof_summary(state), "delivery": state.get("delivery", {}),
             "check_revisions": state.get("check_revisions", []),
@@ -434,6 +468,14 @@ class AppService:
         if delivery.get("limitations"):
             lines += ["", "## Still to check or finish", ""] + ["- " + text for text in delivery["limitations"]]
         proof = snapshot["proof"]
+        if proof["requirements"]:
+            lines += ["", "## Your requirements", ""]
+            lines += ["- " + item["text"] + ": " + item["status"] for item in proof["requirements"]]
+        if snapshot.get("repair_history"):
+            lines += ["", "## What SPARKLE investigated", ""]
+            for item in snapshot["repair_history"]:
+                lines += ["- " + item["what_happened"], "  " + item["next_step"],
+                          "  Source files inspected: " + (", ".join(item["files"]) or "None found.")]
         lines += ["", f"Recorded checks: {proof['passed']} of {proof['total']} current checks passed.",
                   proof["note"], "", "## File-tool changes", ""]
         lines += ["- " + path for path in snapshot["changed_files"]]

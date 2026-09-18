@@ -4,11 +4,37 @@ A local browser app for your personal NVIDIA Nemotron coding agent.
 Chat with the agent, select projects, approve commands, inspect file changes,
 review checks, and resume saved tasks without using a terminal interface.
 
-Version **0.5.0**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
+Version **0.6.0**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
 Python **3.11+** is required once; there are no third-party runtime packages.
 Launchers are included for Windows, macOS, and Linux.
 
-## Simple explanations and project folders in 0.5.0
+## Guided work in 0.6.0
+
+- **Project brief** saves your purpose, a plain-language checklist, and preferences.
+  Each new task receives a snapshot. Editing the brief cannot remove requirements
+  from an existing task; start a new task when your scope changes.
+- **Check setup** identifies project types, locates tools, and explains missing
+  setup. It reads settings without running commands or installing anything.
+  A tool found on PATH is not a compatibility or behavior test. Docker's internal
+  tools and installed project dependencies remain unverified by this scan.
+- **Your requirements** links the saved checklist to actual check results. An
+  unchecked requirement prevents a completion pass. The model proposes coverage
+  links; the runtime validates IDs and results, not their semantic completeness.
+- Completion considers every active recorded and discovered check, even when
+  user-required commands already pass. Setup commands also invalidate earlier
+  evidence through an environment revision, including changes in ignored folders.
+- Repeated failed checks or completion claims trigger a source and setup review.
+  **What SPARKLE investigated** shows the inspected files and next investigation.
+  The agent can still need another attempt; this is not a guarantee of repair.
+- **Simple view** is the default. Activity, changes, and checks remain available
+  through the details button and Run monitor. Switch to advanced view in the sidebar.
+
+This is the first release of the staged expansion. Live previews, browser
+automation, a code editor, parallel agents, a GitHub panel, document tools,
+plugins, scheduling, and remote access are **not implemented in this release**.
+See [ROADMAP.md](ROADMAP.md) for the remaining stages and acceptance criteria.
+
+## Simple explanations and project folders retained from 0.5.0
 
 - Problems now say **what happened, what it means, and what to do next**.
   Long commands and tracebacks sit inside optional technical details.

@@ -36,6 +36,8 @@ id("app").innerHTML = `
       <button data-view="build" class="nav-item active"><span data-icon="chat"></span>Build<span class="nav-dot"></span></button>
       <button data-view="files" class="nav-item"><span data-icon="folder"></span>Project files<span class="nav-count" id="fileCount">0</span></button>
       <button data-view="monitor" class="nav-item"><span data-icon="panel"></span>Run monitor<span class="nav-count" id="monitorLive">Live</span></button>
+      <button id="briefButton" class="nav-item"><span data-icon="file"></span>Project brief</button>
+      <button id="setupButton" class="nav-item"><span data-icon="check"></span>Check setup</button>
       <button id="storageButton" class="nav-item"><span data-icon="folder"></span>Device storage</button>
       <button data-view="history" class="nav-item"><span data-icon="history"></span>Run history</button>
     </nav>
@@ -43,6 +45,7 @@ id("app").innerHTML = `
     <div class="sidebar-bottom">
       <button id="settingsButton" class="connection-card"><span class="connection-symbol" data-icon="bolt"></span><span class="connection-label"><strong id="connectionLabel">Connect Nemotron</strong><span id="connectionSub">Add your model connection</span></span><span data-icon="settings"></span></button>
       <div class="local-label"><span data-icon="shield"></span>Engine on your device<button id="quitButton" aria-label="Quit application" title="Quit application"><span data-icon="power"></span></button></div>
+      <button id="experienceButton" class="text-button experience-button" aria-pressed="false">Switch to advanced view</button>
       <div class="app-version" id="appVersion">PERSONAL EDITION</div>
     </div>
   </aside>
@@ -72,6 +75,7 @@ id("app").innerHTML = `
             </div>
             <div id="messages" class="messages" aria-live="polite"></div>
             <div id="resultBanner" class="result-banner" hidden></div><section id="deliveryPanel" class="delivery-panel" aria-label="What works and how to use it" hidden></section>
+            <section id="repairPanel" class="delivery-panel" aria-label="Repair history" hidden></section>
           </div>
           <div id="approvalCard" class="approval-card" hidden>
             <div class="approval-heading"><span data-icon="shield"></span><strong id="approvalTitle">Permission to run a command</strong></div>
@@ -144,6 +148,17 @@ id("app").innerHTML = `
 <dialog id="storageDialog"><div class="dialog-header"><div><span class="eyebrow">LOCAL DEVICE STORAGE</span><h2>Your data folder</h2></div><button class="icon-button" data-close="storageDialog" aria-label="Close storage settings"><span data-icon="close"></span></button></div><p class="dialog-intro">New projects live in the PROJECTS folder inside SPARKLE CODER. Saved tasks stay with each project. Settings live in APP_DATA beside PROJECTS. Choose an empty folder to move managed data there. Existing projects outside this folder stay in their current locations.</p><label for="projectsPath">Your projects folder</label><input id="projectsPath" readonly><button id="openProjectsDirectory" class="button secondary projects-open">Open PROJECTS folder</button><p id="storageMigration" class="settings-note" hidden></p><label for="storagePath">Settings and managed data <span>Advanced: choose another location</span></label><div class="folder-input"><input id="storagePath"><button id="browseStorage" class="button secondary">Browse</button></div><div class="storage-links"><button id="openStorage" class="text-button">Open current folder ↗</button><button id="copyStoragePath" class="text-button">Copy current path</button></div><p class="settings-note">Switching folders copies data first and keeps the original as a backup. API keys remain in memory.</p><div id="storageResult" class="inline-result" hidden></div><div class="dialog-actions"><button id="saveStorage" class="button primary">Copy data and use this folder</button></div></dialog>
 <dialog id="duplicateDialog"><div class="dialog-header"><h2>Copy a project file</h2><button class="icon-button" data-close="duplicateDialog" aria-label="Close"><span data-icon="close"></span></button></div><form id="duplicateForm"><label for="duplicatePath">New path inside this project</label><input id="duplicatePath" required><p class="settings-note">Use forward slashes for folders. Existing files are preserved.</p><div class="dialog-actions"><button type="submit" class="button primary">Create copy</button></div></form></dialog>
 <dialog id="exportDialog"><div class="dialog-header"><h2>Copy project to your device</h2><button class="icon-button" data-close="exportDialog" aria-label="Close"><span data-icon="close"></span></button></div><form id="exportForm"><label for="exportPath">Destination folder</label><div class="folder-input"><input id="exportPath" required placeholder="Absolute device-folder path"><button type="button" id="browseExport" class="button secondary">Browse</button></div><p class="settings-note">Creates a new project copy inside this folder. Existing files are preserved. Dependencies, credentials, Git internals, and agent history are excluded.</p><div id="exportResult" class="inline-result" hidden></div><div class="dialog-actions"><button type="submit" id="saveExport" class="button primary">Copy project</button></div></form></dialog>
+<dialog id="briefDialog"><div class="dialog-header"><h2>Tell SPARKLE about your project</h2><button class="icon-button" data-close="briefDialog" aria-label="Close project brief"><span data-icon="close"></span></button></div>
+  <form id="briefForm"><p class="dialog-intro">Keep your goals in one place. Each new task gets a copy. Saved tasks keep their original checklist, so changes here cannot quietly remove their requirements.</p>
+  <label for="briefPurpose">What is this project for?</label><textarea id="briefPurpose" rows="3" maxlength="2000" placeholder="A personal expense tracker I can use offline."></textarea>
+  <label for="briefRequirements">What must work? <span>One requirement per line; up to 20</span></label><textarea id="briefRequirements" rows="5" maxlength="6020" placeholder="Add, edit, and delete an expense&#10;Keep expenses after restarting&#10;Export expenses to CSV"></textarea>
+  <label for="briefConstraints">Preferences and things to preserve</label><textarea id="briefConstraints" rows="3" maxlength="2000" placeholder="Explain things simply. Keep my existing data. Use local storage."></textarea>
+  <p class="settings-note">No programming commands needed. Saved on your device with this project. Do not put passwords or API keys here.</p><div id="briefResult" class="inline-result" role="status" hidden></div>
+  <div class="dialog-actions"><button type="submit" id="saveBrief" class="button primary">Save project brief</button></div></form></dialog>
+<dialog id="setupDialog"><div class="dialog-header"><h2>Project setup</h2><button class="icon-button" data-close="setupDialog" aria-label="Close setup report"><span data-icon="close"></span></button></div>
+  <p id="setupSummary" class="dialog-intro" role="status">Reading project settings…</p><div id="setupItems" class="setup-items"></div><details class="technical-details"><summary>Project map and available checks</summary><pre id="setupMap"></pre></details>
+  <p class="settings-note">This scan does not run commands or install software. Finding a tool does not prove its version or the project works.</p>
+  <div class="dialog-actions"><button id="setupConnection" class="button secondary">Connect Nemotron</button><button id="refreshSetup" class="button secondary">Check again</button><button id="investigateSetup" class="button primary">Help with setup</button></div></dialog>
 <dialog id="quitDialog"><div class="dialog-header"><h2>Close SPARKLE CODER?</h2></div><p class="dialog-intro">The local engine will stop. Your projects and run history are saved. Use the desktop launcher to reopen it.</p><div class="dialog-actions"><button class="button secondary" data-close="quitDialog">Keep working</button><button id="confirmQuit" class="button danger">Quit app</button></div></dialog>
 `;
 fillIcons();
@@ -152,6 +167,7 @@ let appState = null, projectId = null, currentSession = null, currentRun = null;
 let files = [], historyItems = [], changes = [], runEvents = [], view = "build", tab = "activity";
 let fileData=null, transferBusy=false, cancelTransfer=false, lastConsoleKey="";
 let pollTimer = null, lastMessageKey = "", lastChangeKey = "", selectedFile = "", toastTimer = null;
+let briefRevision = null, briefProjectId = null, setupProjectId = null;
 const hash = new URLSearchParams(location.hash.slice(1));
 if (hash.get("token")) { sessionStorage.setItem("sparkleToken", hash.get("token")); window.history.replaceState(null, "", location.pathname); }
 const accessToken = sessionStorage.getItem("sparkleToken") || "";
@@ -194,6 +210,8 @@ function renderProvider() {
 function renderControls() {
   const working=busy(); id("runButton").disabled=!!working || transferBusy; id("runButton").firstChild.textContent=working ? "Working " : currentSession ? "Continue " : "Run agent";
   id("taskMode").disabled=!!working;
+  id("saveBrief").disabled=!!working;
+  id("investigateSetup").disabled=!!working;
   id("reviewEdits").disabled=!!working||id("taskMode").value==="ask";
   id("stopButton").hidden=!working; id("stopButton").disabled=currentRun?.status==="stopping";
   id("projectSelect").disabled=!!working || transferBusy; id("addProject").disabled=!!working||transferBusy; id("newTask").disabled=!!working||transferBusy;
@@ -239,6 +257,7 @@ function renderSession(session) {
   id("resultBanner").hidden=!session || busy() || session.status==="running";
   if(session && !busy()) renderRecovery(session);
   renderDelivery(session);
+  renderRepairHistory(session);
   id("callsMetric").textContent=session?.usage?.calls ?? "—";
   const usage=session?.usage; id("tokensMetric").textContent=usage ? ((usage.prompt_tokens||0)+(usage.completion_tokens||0)).toLocaleString() : "—";
   id("changeCount").textContent=session?.changed_files?.length||0; id("checkCount").textContent=session?.checks?.length||0;
@@ -253,7 +272,7 @@ function renderActivity() {
   const target=id("activityList"); target.replaceChildren();
   const actions=currentSession?.actions||[];
   if(!actions.length && !runEvents.length) { target.append(emptyPanel("Ready when you are","The agent's progress and decisions will appear here.")); return; }
-  const names={revise_check:"Corrected a test",update_delivery:"Prepared usage instructions",discover_checks:"Found project checks",request_input:"Asked for a missing detail",list_files:"Explored project",read_file:"Read file",search_files:"Searched code",write_file:"Wrote file",edit_file:"Edited file",delete_file:"Removed file",run_command:"Ran command",verify:"Ran verification",update_plan:"Updated plan",remember:"Saved project memory"};
+  const names={inspect_setup:"Inspected project setup",revise_check:"Corrected a test",update_delivery:"Prepared usage instructions",discover_checks:"Found project checks",request_input:"Asked for a missing detail",list_files:"Explored project",read_file:"Read file",search_files:"Searched code",write_file:"Wrote file",edit_file:"Edited file",delete_file:"Removed file",run_command:"Ran command",verify:"Ran verification",update_plan:"Updated plan",remember:"Saved project memory"};
   actions.slice(-25).reverse().forEach(a=> { const row=node("div","activity-row"); const marker=node("span","activity-marker "+(a.ok?"ok":"failed")); marker.innerHTML=icon(a.ok?"check":"close"); const detail=node("div"); detail.append(node("strong","",names[a.tool]||a.tool),node("span","",a.label||a.purpose||a.path||a.query||(a.command?"Command recorded — open Run monitor for details":a.ok?"Completed":"Needs attention"))); row.append(marker,detail); if(a.error) row.title=a.error; target.append(row); });
   if(busy()) { const latest=runEvents[runEvents.length-1]; const row=node("div","live-activity",latest?.text?.slice(0,250)||"Working…"); target.prepend(row); }
 }
@@ -287,11 +306,15 @@ function followup(message,mode) {
 }
 function renderDelivery(session) {
   const panel=id("deliveryPanel"),delivery=session?.delivery||{},proof=session?.proof;
-  panel.hidden=!session||(!delivery.summary&&!proof?.total);panel.replaceChildren();if(panel.hidden)return;
+  panel.hidden=!session||(!delivery.summary&&!proof?.total&&!proof?.requirements?.length);panel.replaceChildren();if(panel.hidden)return;
   panel.append(node("h2","","What works and what is left"));
   if(delivery.summary){panel.append(node("p","delivery-summary",delivery.summary),node("span","delivery-source","Agent explanation · check evidence below"));}
   if(proof?.total)panel.append(node("p","proof-count",proof.passed+" of "+proof.total+" current checks passed"+(proof.needs_recheck?" · "+proof.needs_recheck+" need to run again":"")));
   const labels={passed:"Check passed",needs_fix:"Needs a fix",not_checked:"Not checked yet",needs_recheck:"Needs another check"};
+  if(proof?.requirements?.length){
+    panel.append(node("h3","","Your requirements"),node("p","proof-count",proof.requirements_passed+" of "+proof.requirements.length+" have passing evidence"));
+    proof.requirements.forEach(item=>{const row=node("div","proof-feature");row.append(node("span","",item.text),node("span","proof-state "+item.status,labels[item.status]));panel.append(row);});
+  }
   (proof?.features||[]).forEach(feature=>{const row=node("div","proof-feature");row.append(node("span","",feature.feature),node("span","proof-state "+feature.status,labels[feature.status]));panel.append(row);});
   if(proof?.note)panel.append(node("p","proof-note",proof.note));
   if(delivery.how_to_use?.length){panel.append(node("h3","","How to use it"));const steps=node("ol","usage-steps");delivery.how_to_use.forEach(step=>steps.append(node("li","",step)));panel.append(steps);}
@@ -312,6 +335,17 @@ function renderChecks() {
   checks.filter(c=>c.active!==false).slice().reverse().forEach(c=>target.append(checkCard(c)));
   const earlier=checks.filter(c=>c.active===false);
   if(earlier.length){const history=node("details","check-history");history.append(node("summary","","Earlier checks and corrections ("+earlier.length+")"));earlier.slice().reverse().forEach(c=>history.append(checkCard(c)));target.append(history);}
+}
+function renderRepairHistory(session) {
+  const panel=id("repairPanel"),reviews=session?.repair_history||[];
+  panel.replaceChildren();panel.hidden=!reviews.length;if(panel.hidden)return;
+  const details=node("details","repair-history");details.append(node("summary","","What SPARKLE investigated ("+reviews.length+" reviews)"));
+  reviews.slice(-8).reverse().forEach(review=>{
+    const entry=node("article","repair-entry");entry.append(node("strong","",review.what_happened),node("p","",review.next_step));
+    entry.append(node("p","proof-note","Source files inspected: "+(review.files?.join(", ")||"No matching file was found; more investigation is needed.")));
+    if(review.missing_requirements?.length)entry.append(node("p","","Still to check: "+review.missing_requirements.join("; ")));
+    details.append(entry);
+  });panel.append(details);
 }
 async function loadChanges() {
   id("changesList").replaceChildren();
@@ -356,7 +390,7 @@ async function loadHistory() {
 async function loadSession(sessionId) { if(busy()) { toast("Finish or stop the current task first."); return; } currentRun=null; runEvents=[]; const data=await api("/projects/"+projectId+"/sessions/"+sessionId); runEvents=data.events||[]; id("taskMode").value=data.task_mode||"build"; renderSession(data); id("verifyCommands").value=(data.required_checks||[]).join("\n"); changeView("build"); if(tab==="changes")await loadChanges(); }
 async function newTask() { if(busy()||transferBusy)return; currentRun=null; runEvents=[]; id("taskMode").value="build"; renderSession(null); id("goal").value=""; id("verifyCommands").value=""; id("verificationFields").hidden=true; changeView("build"); setTab("activity"); id("goal").focus(); }
 async function selectProject(next) { if(busy()||transferBusy)return; await api("/select-project",{project_id:next}); projectId=next; selectedFile=""; fileData=null; id("fileSearch").value=""; id("fileName").textContent="Select a file"; id("filePreview").textContent="Select a file to inspect its contents."; renderProjects(); await newTask(); await Promise.all([loadFiles(),loadHistory()]); }
-async function refreshState() { appState=await api("/state"); projectId=projectId||appState.selected_project; renderProjects(); renderProvider(); if(appState.active_run&&!currentRun) { currentRun=appState.active_run; projectId=currentRun.project_id; renderProjects(); schedulePoll(50); } }
+async function refreshState() { appState=await api("/state"); projectId=projectId||appState.selected_project; renderProjects(); renderProvider(); renderExperience(); if(appState.active_run&&!currentRun) { currentRun=appState.active_run; projectId=currentRun.project_id; renderProjects(); schedulePoll(50); } }
 
 function schedulePoll(ms=600) { clearTimeout(pollTimer); pollTimer=setTimeout(()=>action(pollRun),ms); }
 async function pollRun() {
@@ -411,6 +445,57 @@ async function saveSettings(test=false) {
   } catch(error) { id("connectionResult").hidden=false; id("connectionResult").className="inline-result"; id("connectionResult").textContent=error.message; }
   finally { id("saveSettings").disabled=false; id("testConnection").disabled=false; }
 }
+
+function renderExperience() {
+  const advanced=appState.experience==="advanced";
+  document.body.classList.toggle("simple-mode",!advanced);
+  id("experienceButton").textContent=advanced?"Switch to simple view":"Switch to advanced view";
+  id("experienceButton").setAttribute("aria-pressed",String(advanced));
+}
+async function openProjectBrief() {
+  briefProjectId=projectId;
+  id("briefResult").hidden=true;id("saveBrief").disabled=true;
+  const result=await api("/projects/"+briefProjectId+"/brief");
+  briefRevision=result.revision;
+  id("briefPurpose").value=result.brief.purpose;
+  id("briefRequirements").value=result.brief.requirements.join("\n");
+  id("briefConstraints").value=result.brief.constraints;
+  id("saveBrief").disabled=!!busy();id("briefDialog").showModal();
+}
+async function saveProjectBrief(event) {
+  event.preventDefault();if(busy())return;
+  id("saveBrief").disabled=true;id("briefResult").hidden=false;
+  try {
+    const result=await api("/projects/"+briefProjectId+"/brief",{revision:briefRevision,brief:{
+      purpose:id("briefPurpose").value,requirements:id("briefRequirements").value.split("\n").map(x=>x.trim()).filter(Boolean),constraints:id("briefConstraints").value}});
+    briefRevision=result.revision;id("briefResult").textContent="Saved. New tasks will use this brief. Existing tasks keep their original checklist.";
+  } catch(error) {id("briefResult").textContent=error.message;}
+  finally {id("saveBrief").disabled=!!busy();}
+}
+function renderSetupReport(report) {
+  id("setupSummary").textContent=report.attention?report.attention+" setup item(s) need attention. Your files are saved.":"No missing tools were identified by this scan. Project tests still need to run.";
+  const target=id("setupItems");target.replaceChildren();
+  const labels={found:"Found",attention:"Needs attention",info:"Not verified"};
+  report.items.forEach(item=>{
+    const card=node("article","setup-item "+item.status),heading=node("div","setup-item-heading");
+    heading.append(node("strong","",item.title),node("span","",labels[item.status]));card.append(heading,node("p","",item.detail));
+    if(item.next_step)card.append(node("p","setup-next",item.next_step));target.append(card);
+  });
+  const overview=report.overview;
+  id("setupMap").textContent=["Files inspected: "+overview.file_count+(overview.scan_truncated?" (partial scan)":""),
+    "Languages: "+(Object.keys(overview.languages).join(", ")||"Not identified yet"),
+    "Project settings: "+(overview.manifests.join(", ")||"None found"),
+    "Starting points: "+(overview.entry_points.join(", ")||"None identified"),
+    "\nCandidate checks (not executed):",...report.checks.map(check=>check.cwd+": "+check.command)].join("\n");
+}
+async function refreshSetup() {
+  id("refreshSetup").disabled=true;id("setupSummary").textContent="Reading project settings…";
+  id("setupItems").replaceChildren();id("setupMap").textContent="";
+  try {renderSetupReport(await api("/projects/"+setupProjectId+"/setup"));}
+  catch(error){id("setupSummary").textContent="Setup could not be inspected. "+error.message;}
+  finally {id("refreshSetup").disabled=false;id("investigateSetup").disabled=!!busy();}
+}
+async function openSetup() {setupProjectId=projectId;id("setupDialog").showModal();await refreshSetup();}
 
 function humanBytes(bytes=0) { return bytes<1024?bytes+" B":bytes<1048576?(bytes/1024).toFixed(1)+" KiB":(bytes/1048576).toFixed(1)+" MiB"; }
 function duration(seconds=0) { return seconds<60?Math.floor(seconds)+"s":Math.floor(seconds/60)+"m "+Math.floor(seconds%60)+"s"; }
@@ -552,6 +637,13 @@ document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>changeView(b.d
 document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>id(b.dataset.close).close());
 document.querySelectorAll(".suggestion").forEach(b=>b.onclick=()=>{id("taskMode").value=b.dataset.mode||"build";renderControls();id("goal").value=b.dataset.prompt;id("goal").focus();});
+id("briefButton").onclick=()=>action(openProjectBrief);
+id("briefForm").onsubmit=e=>action(()=>saveProjectBrief(e));
+id("setupButton").onclick=()=>action(openSetup);
+id("refreshSetup").onclick=()=>action(refreshSetup);
+id("setupConnection").onclick=()=>{id("setupDialog").close();openSettings();};
+id("investigateSetup").onclick=()=>{if(busy())return;id("setupDialog").close();followup("Inspect this project's setup. Identify missing tools or dependencies, explain what is needed in simple words, and ask before running installation commands. Verify the setup with real checks where possible.","build");};
+id("experienceButton").onclick=()=>action(async()=>{await api("/experience",{experience:appState.experience==="advanced"?"simple":"advanced"});await refreshState();});
 id("taskMode").onchange=renderControls;
 id("showApiKey").onclick=()=>{const show=id("apiKey").type==="password";id("apiKey").type=show?"text":"password";id("showApiKey").textContent=show?"Hide":"Show";id("showApiKey").setAttribute("aria-pressed",String(show));};
 id("clearApiKey").onclick=()=>action(async()=>{await api("/settings",{base_url:id("baseUrl").value.trim(),clear_key:true});await refreshState();id("apiKey").value="";id("keyHint").textContent="Key removed for this app session";id("clearApiKey").disabled=true;});

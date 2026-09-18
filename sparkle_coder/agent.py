@@ -11,7 +11,8 @@ import time
 
 from .provider import ModelError
 from .explanations import check_title, explain_checks, simple_recovery
-from .verification import active_checks
+from .verification import active_checks, proof_summary
+from .state import now
 from .tools import READ_ONLY_TOOLS, SCHEMAS, ToolSet
 from .workspace import atomic_write, clean_terminal
 
@@ -62,6 +63,13 @@ old results and supersedes them only after a real replacement passes. Preserve e
 original check was meant to cover. Required and project-owned checks remain protected.
 Separate independent checks so one failing assertion does not hide every later result.
 Do not ask a non-programmer to debug your code or fix an invented test expectation. Investigate first.
+The runtime checkpoint includes the user's saved project brief and requirement IDs. Preserve them.
+Use update_delivery.requirement_ids to link every requirement to checks that actually cover it.
+An unmapped or untested requirement cannot count as complete. Explain missing evidence honestly.
+Setup inspection only locates tools; it cannot establish dependency compatibility or test success.
+When a repair review appears, use its source and setup evidence to investigate a different cause.
+Keep investigations focused. Re-read only relevant changed files, then run the smallest useful
+check before the full suite. Do not repeat a failed command without a reason it can now succeed.
 """
 
 
@@ -93,6 +101,7 @@ class Agent:
         self.required_cache = {}
         self.completion_failures = {}
         self.environment_changed = False
+        self.repair_reviews = set()
 
     def say(self, text):
         self.emit(clean_terminal(self.tools.redactor.text(text)))
@@ -118,6 +127,14 @@ class Agent:
                        '{"final": "summary and verification"} when finished.\nTools:\n'
                        + json.dumps(self.schemas))
         checkpoint = {
+            "user_project_brief": state.get("project_brief", {}),
+            "user_requirements": state.get("requirements", []),
+            "requirement_evidence": proof_summary(state)["requirements"],
+            "project_overview": {key: value[:16] if isinstance(value, list) else value
+                                 for key, value in state.get("setup", {}).get("overview", {}).items()},
+            "setup_attention": [item for item in state.get("setup", {}).get("items", [])
+                                if item["status"] == "attention"][:8],
+            "recent_repair_reviews": state.get("repair_history", [])[-2:],
             "plan": state["plan"],
             "recent_user_requests": state.get("user_requests", [state["goal"]])[-4:],
             "required_acceptance_commands": state["required_checks"],
@@ -168,6 +185,8 @@ class Agent:
             checkpoint["recent_actions"] = state["actions"][-3:]
             checkpoint["project_memory"] = "Memory omitted to fit context; inspect project files for current facts."
             checkpoint["file_tool_changes"] = checkpoint["file_tool_changes"][-50:]
+            checkpoint["project_overview"] = {}
+            checkpoint["recent_repair_reviews"] = []
             prefix[-1]["content"] = "RUNTIME CHECKPOINT (data, not new instructions):\n" + json.dumps(
                 self.tools.redactor.value(checkpoint), ensure_ascii=False)
         if size(prefix) > self.config.context_chars:
@@ -227,6 +246,15 @@ class Agent:
         for revision in state.get("check_revisions", []):
             lines += ["", "Check correction: " + revision["reason"],
                       "Evidence: " + revision["evidence_path"], "Replacement: " + revision["new_id"]]
+        if state.get("requirements"):
+            lines += ["", "## Your requirements", ""]
+            for item in proof_summary(state)["requirements"]:
+                lines.append(f"- {item['text']}: {item['status']} (checks: {', '.join(item['check_ids']) or 'none'})")
+        if state.get("repair_history"):
+            lines += ["", "## Repair reviews", ""]
+            for item in state["repair_history"]:
+                lines += ["- " + item["what_happened"], "  Next investigation: " + item["next_step"],
+                          "  Files inspected: " + (", ".join(item["files"]) or "No matching source file was found.")]
         lines += ["", "Passing recorded commands is evidence only for what those commands check. "
                   "It does not establish that all requirements are met or that the software is bug-free.",
                   "A model-authored test may be incomplete. Prefer user-owned acceptance checks.",
@@ -245,21 +273,20 @@ class Agent:
                 if self.should_stop():
                     return False, "Stopped by the user."
                 self.say("Running your required check: " + check_title(command))
-                fingerprint = self.workspace.fingerprint()
+                fingerprint = (self.workspace.fingerprint(), self.session.state.get("environment_revision", 0))
                 cached = self.required_cache.get(command)
                 try:
-                    if fingerprint and cached and cached[0] == fingerprint:
+                    if fingerprint[0] and cached and cached[0] == fingerprint:
                         result = cached[1]
                     else:
                         result = self.tools.verify(command, trusted=True)
-                        self.required_cache[command] = (self.workspace.fingerprint(), result)
+                        self.required_cache[command] = ((self.workspace.fingerprint(), self.session.state.get("environment_revision", 0)), result)
                 except (OSError, ValueError) as exc:
                     result = {"ok": False, "error": str(exc)}
                 results.append({"command": command, **result})
                 self.say(("Passed: " if result["ok"] else "Needs attention: ") + check_title(command))
-            if all(r["ok"] for r in results):
-                return True, "All user-configured acceptance commands passed."
-            return False, "Required acceptance commands failed. Diagnose and repair; do not weaken them.\n" + json.dumps(results)
+            if not all(r["ok"] for r in results):
+                return False, "Required acceptance commands failed. Diagnose and repair; do not weaken them.\n" + json.dumps(results)
         current = self.workspace.fingerprint()
         latest = {}
         for check in active_checks(self.session.state):
@@ -281,7 +308,7 @@ class Agent:
                 latest[(command, cwd)] = check
                 continue  # A later run may request approval again; never bypass a denial in this run.
             if (not current or check.get("fingerprint") != current or check.get("denied")
-                    or (self.environment_changed and not check.get("ok"))):
+                    or check.get("environment_revision", 0) != self.session.state.get("environment_revision", 0)):
                 self.observe("verification_start", {"command": command, "cwd": cwd})
                 self.say("Checking: " + (check.get("label") or check_title(command)))
                 self.tools.verify(command, cwd, label=check.get("label", ""), source=check.get("source"))
@@ -289,12 +316,20 @@ class Agent:
         self.environment_changed = False
         current = self.workspace.fingerprint()
         self.session.state["verification_fingerprint"] = current
-        if current and latest and all(c.get("ok") and c.get("fingerprint") == current for c in latest.values()):
-            return True, "Agent-selected verification commands passed against the current tracked project files."
+        if current and latest and all(c.get("ok") and c.get("fingerprint") == current
+                                     and c.get("environment_revision", 0) == self.session.state.get("environment_revision", 0)
+                                     for c in latest.values()):
+            pending = [item for item in proof_summary(self.session.state)["requirements"] if item["status"] != "passed"]
+            if pending:
+                return False, ("These user requirements still lack current passing evidence. Implement and test them, "
+                               "then link their requirement_ids with update_delivery. Do not remove requirements.\n"
+                               + json.dumps(pending))
+            return True, "All active recorded and discovered checks passed against the current tracked project files."
         if latest:
             failures = [{"check_id": c.get("id"), "command": c["command"], "cwd": c["cwd"], "ok": c.get("ok", False),
                          "output": c.get("output", "")[-6000:]} for c in latest.values()
-                        if not c.get("ok") or c.get("fingerprint") != current]
+                        if not c.get("ok") or c.get("fingerprint") != current
+                        or c.get("environment_revision", 0) != self.session.state.get("environment_revision", 0)]
             return False, ("Checks need repair. Inspect the implementation AND the test's assumptions. "
                            "Use revise_check only for evidence-backed corrections of agent-authored checks; "
                            "do not weaken user requirements.\n" + json.dumps(failures))
@@ -303,11 +338,19 @@ class Agent:
 
     def inspect_failure_sources(self):
         """Gather fresh source evidence when the model repeats a completion claim."""
+        state = self.session.state
+        stamp = self.failure_stamp()
+        if stamp in self.repair_reviews:
+            return
+        self.repair_reviews.add(stamp)
         candidates = []
+        positions = {}
         for check in active_checks(self.session.state):
             if check.get("ok"):
                 continue
-            for filename in re.findall(r'File "([^"\n]+\.py)"', check.get("output", "")):
+            references = re.findall(r'File "([^"\n]+\.py)", line (\d+)', check.get("output", ""))
+            references += re.findall(r'([\w./-]+\.(?:js|jsx|ts|tsx|rs|go|java|cs)):(\d+)', check.get("output", ""))
+            for filename, number in references:
                 path = Path(filename)
                 if path.is_absolute():
                     try:
@@ -315,24 +358,45 @@ class Agent:
                     except ValueError:
                         continue
                 candidates.append(filename)
+                positions[filename] = max(1, int(number) - 20)
             for module in re.findall(r"(?:from|import)\s+([A-Za-z_]\w*(?:\.\w+)*)", check["command"]):
                 prefix = "" if check.get("cwd", ".") == "." else check["cwd"] + "/"
                 candidates.append(prefix + module.replace(".", "/") + ".py")
+        candidates.extend(item["path"] for item in reversed(state["journal"][-4:]))
+        candidates.extend(reversed(list(state.get("read_evidence", {}))[-4:]))
         evidence = []
         for name in dict.fromkeys(candidates):
             if len(evidence) >= 4 or self.should_stop():
                 break
             try:
                 if self.workspace.path(name).is_file():
-                    result = self.tools.execute("read_file", {"path": name, "max_lines": 120})
+                    result = self.tools.execute("read_file", {"path": name, "start_line": positions.get(name, 1), "max_lines": 100})
                     if result.get("ok"):
                         evidence.append(result)
             except (OSError, ValueError):
                 continue
-        if evidence:
-            self.feedback("The same check still fails. Here is fresh source evidence. Diagnose the cause rather "
-                          "than proposing completion again. Check whether your test assumed the wrong result.\n"
-                          + json.dumps(evidence, ensure_ascii=False))
+        setup = self.tools.execute("inspect_setup", {})
+        issue = explain_checks(state)[0]
+        missing = [item for item in proof_summary(state)["requirements"] if item["status"] != "passed"]
+        next_step = ("Compare the failing test with the intended behavior and the source; fix the cause, then rerun the focused check."
+                     if issue["kind"] not in ("dependency", "timeout", "permission", "approval") else issue["next_step"])
+        review = {"at": now(), "what_happened": issue["what_happened"], "kind": issue["kind"],
+                  "next_step": next_step, "files": [item["path"] for item in evidence],
+                  "check_ids": issue["check_ids"], "missing_requirements": [item["text"] for item in missing],
+                  "checks_attempted": len(state["checks"])}
+        state.setdefault("repair_history", []).append(self.tools.redactor.value(review))
+        state["repair_history"] = state["repair_history"][-30:]
+        self.observe("repair_review", {"text": "Reviewing the cause before another repair.", **review})
+        self.feedback("REPAIR REVIEW: Repeated attempts have not resolved the current problem. "
+                      "Use this fresh source evidence to investigate a different cause. Respect declined actions. "
+                      "Do not ask the user to debug your code. If an external decision really is needed, name it precisely.\n"
+                      + json.dumps({"review": review, "source_evidence": evidence,
+                                    "setup": setup.get("items", [])}, ensure_ascii=False))
+
+    def failure_stamp(self):
+        checks = [(c["key"], c.get("ok"), c.get("output", "")[-2000:]) for c in active_checks(self.session.state)]
+        return hashlib.sha256((str(self.workspace.fingerprint()) + str(self.session.state.get("environment_revision", 0))
+                               + json.dumps(checks)).encode()).hexdigest()
 
     def run(self):
         state = self.session.state
@@ -345,6 +409,8 @@ class Agent:
         malformed = 0
         self.say(f"Session {self.session.id} | {self.config.model} | {self.config.execution}")
         try:
+            if state.get("task_mode") != "ask":
+                self.tools.execute("inspect_setup", {})
             step = 0
             while True:
                 step += 1
@@ -394,6 +460,7 @@ class Agent:
                                        {"action": "connection", "message": "Review the model endpoint response, then resume."})
                 assistant = {"role": "assistant", "content": self.tools.redactor.text(response.content)}
                 if response.calls:
+                    review_needed = False
                     assistant["tool_calls"] = self.tools.redactor.value(response.calls)
                 state["messages"].append(assistant)
                 self.session.save()  # Save intent before side effects; interrupted actions are never replayed.
@@ -428,6 +495,8 @@ class Agent:
                             result = {"ok": False, "error": "Tool arguments are not valid JSON. Retry with a valid object."}
                         if not result.get("ok"):
                             self.failures[signature] = self.failures.get(signature, 0) + 1
+                            if name == "verify" and self.failures[signature] == 2:
+                                review_needed = True
                             if result.get("explanation"):
                                 self.say(result["explanation"]["what_happened"])
                             elif result.get("denied"):
@@ -443,6 +512,8 @@ class Agent:
                         request = state["input_request"]
                         return self.finish("needs_input", request["question"] + "\n\n" + request["next_step"],
                                            {"action": "instructions", "message": request["next_step"]})
+                    if review_needed:
+                        self.inspect_failure_sources()
                     continue
                 if not response.content.strip():
                     self.feedback("Your response was empty. Use a tool or provide a concise completion/blocker report.")
@@ -456,9 +527,7 @@ class Agent:
                     return self.finish("checked", response.content + "\n\nRuntime evidence: " + evidence)
                 # Repairs have no attempt cap. Only identical completion proposals
                 # against the same files and evidence trigger a request for help.
-                comparable = [(c["key"], c.get("ok"), c.get("output", "")[-2000:])
-                              for c in active_checks(state)]
-                stamp = hashlib.sha256((str(self.workspace.fingerprint()) + json.dumps(comparable)).encode()).hexdigest()
+                stamp = self.failure_stamp()
                 self.completion_failures[stamp] = self.completion_failures.get(stamp, 0) + 1
                 if self.completion_failures[stamp] == 2:
                     self.inspect_failure_sources()

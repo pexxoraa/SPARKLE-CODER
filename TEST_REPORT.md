@@ -1,114 +1,80 @@
-# Validation report — SPARKLE CODER 0.5.0
+# Validation report — SPARKLE CODER 0.6.0
 
-Validated on Linux with Python 3.12.14 on 2026-09-17.
+Validated on Linux with Python 3.12.14 on 2026-09-18.
 
-**111 automated Python tests passed. No failures, errors or skipped tests.**
-The complete output is in [TEST_RESULTS.txt](TEST_RESULTS.txt). The standalone
-JavaScript browser API-helper and explanation-rendering tests also passed. Model responses were scripted;
-no live NVIDIA credentials or local inference server were available.
+**128 automated Python tests passed, with no failures, errors, or skips.**
+The complete output is in [TEST_RESULTS.txt](TEST_RESULTS.txt). Both JavaScript
+scripts passed: `tests/test_ui_client.js` and `tests/test_ui_explanations.js`.
+Model replies in tests are scripted; no live NVIDIA key or inference server was available.
 
-## Plain explanations and PROJECTS workflows exercised
+## New guided-work workflows
 
-- A dependency-free tokenizer fixture reproduces the exact “Expected vocab 36,
-  got 54” error in two check variants. Their explanation reports both counts
-  without assuming which is correct. A replacement derives its expectation from
-  sample data and special symbols, checks round trips and unknown characters,
-  and passes. Both original failures remain saved while completion uses the
-  corrected active check. This is a reproduction, not a test of the user's
-  unavailable PyTorch model files.
-- Unread or changed source evidence cannot retire a failed check. A failing
-  replacement preserves the original. User-required checks and discovered project
-  commands remain protected, including a later user requirement reinstating a
-  previously corrected command. Old sessions gain stable check IDs.
-- Repeated unsuccessful completion claims trigger source inspection and produce
-  a plain recovery summary, with raw scripts and tracebacks kept in details.
-  A declined command records its actual cause without repeating the approval.
-- Feature statuses use real check IDs. Invented IDs are rejected, untested
-  features remain untested, and edited files require fresh verification.
-  Opening a saved result detects later manual edits. Model-authored coverage
-  labels are not independently proven by these tests.
-- New managed projects use the application folder's PROJECTS directory. Migration
-  preserves saved tasks, original files and external registrations; follows an
-  older custom-storage pointer; avoids name collisions; and rolls back newly
-  copied destinations if a later copy fails. Retrying succeeds without changing
-  the originals. Moving selected storage includes sibling PROJECTS data, persists
-  across reopening, and rejects recursive destinations.
-- A migrated check cannot execute against its previous project folder. Old
-  failure snapshots receive simple recovery messages when reopened.
-- JavaScript DOM-double tests exercise actual rendering functions: technical
-  details start collapsed, the counts remain readable, follow-up actions preserve
-  typed requirements and choose Build/Ask correctly, busy runs cannot submit a
-  second task, correction history stays separate, and untested/stale evidence
-  never displays a passing feature label.
+Seventeen new Python tests exercise the following behavior:
 
-## Reliability workflows exercised
-
-- Six real edit/check/repair rounds finish with passing acceptance checks, beyond
-  the old three-attempt cutoff. Identical unsuccessful completion claims request
-  help without inventing a pass or repeatedly rerunning unchanged acceptance tests.
-- A verification command that failed repeatedly can run again after its source
-  is repaired. An environment setup command invalidates cached failed checks.
-- Existing Python tests are discovered, approved and executed. Node discovery
-  selects real package scripts in a nested project and skips watch/placeholder
-  commands. An empty unittest suite does not count as passing verification.
-- A denied check is not requested again during that run; resuming can obtain a
-  fresh approval. Discovery also handles commands denied before any check record.
-- Ask mode rejects file edits and command execution, returns an answer without
-  requiring build checks, and can resume as a Build task.
-- A request for user input saves a concrete next step and does not execute later
-  tool calls from the same response. An unexpected provider exception saves the
-  correct recovery status instead of leaving history marked as running.
-- HTTP 503 and network errors recover on retry, and retry events are observable.
-  Stop cancels retry backoff and releases a run during a slow HTTP response.
-  Authentication errors remain actionable and are not blindly retried.
-- Large tool output is shortened only in the request copy; original history is
-  preserved. A project exceeding the former 30 MB freshness cutoff still obtains
-  a content hash that changes after an edit.
-- Saving a tested connection retains its status. Changing the key resets it;
-  key material is absent from saved settings. Optional command caps validate
-  correctly, and older default command caps migrate without removing chosen run caps.
+- A saved brief supplies requirements to new tasks. Later brief edits do not
+  remove requirements from saved tasks. Concurrent edits reject stale revisions.
+  Invalid, oversized, and symlinked briefs are rejected.
+- Requirements without current passing check evidence prevent completion.
+  Invented requirement IDs and check IDs are rejected. Edited files make old
+  evidence stale. The model still chooses coverage links; these tests do not
+  establish semantic completeness of those links.
+- A scripted build writes and runs a real Python addition function. Its first
+  completion claim is rejected because the requirement is not linked to evidence.
+  The task completes only after supplying the valid link to the passing check.
+- A passing required command cannot hide another active failure or skip a failing
+  discovered project suite. An environment command invalidates earlier passing
+  checks even when it only changes an ignored dependency folder.
+- Repeated unchanged failures trigger one source/setup review for that evidence.
+  The saved repair history names inspected files and preserves the failure.
+- Setup inspection locates tools and reads manifests without executing processes
+  or project code. It ignores excluded secrets and symlinks, handles malformed
+  package JSON, respects the declared package manager, and records no test pass.
+- Docker inspection keeps host availability separate from unverified container
+  tools. Installed project dependencies and compatible tool versions are not
+  established by this read-only scan.
+- HTTP setup and brief endpoints require the launch token. Known API keys are
+  redacted, active work protects brief edits, and display preferences persist
+  across app restarts. Invalid preference values preserve the existing value.
 
 ## Existing workflows retained
 
-The suite also exercises native and JSON model protocols, a real local HTTP
-browser-app workflow, authenticated file import/download/copy/export, binary
-round trips, existing-file preservation, device storage migration, saved run
-history and logs, file diffs and undo conflicts, command/edit approval, live
-subprocess output, pause/resume/stop, launch-token and origin checks, key
-redaction, exact file hashes, guidance, memory, and workspace boundaries.
+The complete suite also exercises the 36-versus-54 tokenizer failure fixture,
+evidence-backed check correction, protected required/discovered checks,
+source freshness, six real repair rounds, native/JSON model protocols, network
+retry/cancellation, file import/copy/download/export, device storage migration,
+PROJECTS placement, run history, approval, pause/resume/stop, logs, diffs,
+conflict-aware file-tool undo, API origin checks, and the graphical launcher.
+The tokenizer case is a synthetic reproduction; the user's original PyTorch
+project was not available in this environment.
 
-Real subprocess tests include Python execution, a JavaScript assertion under
-Node.js, C compilation and execution, explicit command timeout, and cancellation
-of a command without a default timeout. The desktop Python launcher starts an
-isolated local engine, serves its API, and shuts down cleanly on Linux.
+The JavaScript tests run actual rendering and API-helper functions with a small
+DOM double. They cover plain recovery, collapsed technical details, follow-up
+modes, requirement evidence, repair history, and setup labels that distinguish
+finding tools from verifying software. They do not validate visual layout.
 
-## Source and package checks
+## Static and packaging checks
 
-- JavaScript syntax passed. Static markup checks found 170 unique UI element IDs
-  with no duplicates or missing literal JavaScript ID references.
-- `node tests/test_ui_client.js` exercised the actual browser API helper: a saved
-  run error returns resumable run state, while failed HTTP requests and ordinary
-  action errors still surface. This guards against endless polling of a failed run.
-- Python source parsed, Unix launcher shell syntax passed, and the macOS plist
-  identifies version 0.5.0 and its supplied executable.
-- The package built and installed into an isolated target with no downloads or
-  third-party runtime dependencies. Version 0.5.0, explanation/verification code, all four
-  UI assets, and the desktop entry point were present.
-- Git whitespace checks passed. Temporary app state, test environments, package
-  build products and credentials are excluded from the published source.
+- Python source/test AST parsing and JavaScript syntax checks passed.
+- 186 generated UI IDs are unique; no literal ID references are missing.
+- Linux and macOS launcher shell syntax and macOS plist version checks passed.
+- An offline package build and isolated install succeeded with no runtime
+  dependencies. Installed source and UI files match the validated source.
+- The installed 0.6.0 package imports successfully in isolated Python.
+- `git diff --check` passed.
 
-## Not exercised here
+## Remaining limits
 
-- Live Nemotron generation quality, tool selection, response latency, cost or
-  comparative performance against other coding agents.
-- Visual browser rendering or complete browser interactions. Playwright is
-  installed, but its Chromium executable is absent in this environment. Static
-  markup and JavaScript tests do not replace visual, accessibility, clipboard,
-  download and native folder-picker testing on your device.
-- Windows/macOS execution, Docker, mobile SDKs, game engines, GPU or embedded
-  targets, and native installer signing. Their target toolchains still determine
-  which software can actually be built and tested on a particular device.
+Live Nemotron task quality, provider cost, and model selection were not benchmarked.
+The available Playwright installation has no Chromium executable, so visual browser,
+clipboard, and native folder-picker behavior were not exercised. Windows/macOS
+launches, Docker execution, mobile SDKs, GPU/embedded targets, and performance on
+large real projects need testing in their actual environments.
 
-Reproduce: `python -m unittest discover -s tests -v`,
-`node tests/test_ui_client.js`, `node tests/test_ui_explanations.js`,
-and `node --check sparkle_coder/ui/app.js`.
+A passing test proves only its assertions. The agent can still write incomplete
+checks, mislabel their coverage, or require further investigation. Repeated
+unchanged completion claims save the task with a recovery action; they do not
+create a passing result. Provider quotas and hardware limits still apply.
+
+This release implements Stage 1 in [ROADMAP.md](ROADMAP.md). Managed app previews,
+browser automation, editor suggestions, parallel agents, GitHub UI, document tools,
+plugins, scheduling, voice, and private remote access remain planned.

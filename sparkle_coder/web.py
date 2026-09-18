@@ -112,6 +112,10 @@ class Handler(BaseHTTPRequestHandler):
                 if operation == "files":
                     listing = user_files.files(limit=3001)
                     result = {"files": listing[:3000], "truncated": len(listing) > 3000}
+                elif operation == "brief" and len(parts) == 4:
+                    result = app.project_context(project_id)
+                elif operation == "setup" and len(parts) == 4:
+                    result = app.setup(project_id)
                 elif operation == "file":
                     relative = query.get("path", [""])[0]
                     result = user_files.preview(relative)
@@ -174,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
             app = self.server.service
             if path == "/api/settings":
                 result = app.configure(body)
+            elif path == "/api/experience":
+                result = app.experience(body.get("experience"))
             elif path == "/api/connect":
                 result = app.connect()
             elif path == "/api/projects":
@@ -215,6 +221,8 @@ class Handler(BaseHTTPRequestHandler):
                                    task_mode=body.get("task_mode"))
             elif len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] in ("import", "duplicate", "export-folder"):
                 result = app.file_action(parts[2], parts[3], body)
+            elif len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] == "brief":
+                result = app.project_context(parts[2], body)
             elif len(parts) == 4 and parts[:2] == ["api", "runs"]:
                 job = app.job(parts[2])
                 if parts[3] == "approval":

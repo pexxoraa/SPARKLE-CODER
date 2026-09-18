@@ -58,15 +58,24 @@ def proof_summary(state):
             return "not_checked"
         if not check.get("ok"):
             return "needs_fix"
-        return "passed" if current and check.get("fingerprint") == current else "needs_recheck"
+        return "passed" if (current and check.get("fingerprint") == current
+                            and check.get("environment_revision", 0) == state.get("environment_revision", 0)) else "needs_recheck"
+    def combined(values):
+        return ("needs_fix" if "needs_fix" in values else "not_checked" if not values or "not_checked" in values
+                else "needs_recheck" if "needs_recheck" in values else "passed")
     features = []
     for item in state.get("delivery", {}).get("features", []):
         evidence = [effective_check(state, identity) for identity in item["check_ids"]]
         values = [status(check) for check in evidence]
-        result = ("needs_fix" if "needs_fix" in values else "not_checked" if not values or "not_checked" in values
-                  else "needs_recheck" if "needs_recheck" in values else "passed")
-        features.append({**item, "status": result})
-    return {"features": features, "passed": sum(status(c) == "passed" for c in checks),
+        features.append({**item, "status": combined(values)})
+    requirements = []
+    for requirement in state.get("requirements", []):
+        linked = [feature for feature in features if requirement["id"] in feature.get("requirement_ids", [])]
+        requirements.append({**requirement, "status": combined([feature["status"] for feature in linked]),
+                             "check_ids": list(dict.fromkeys(identity for feature in linked for identity in feature["check_ids"]))})
+    return {"features": features, "requirements": requirements,
+            "requirements_passed": sum(item["status"] == "passed" for item in requirements),
+            "passed": sum(status(c) == "passed" for c in checks),
             "failed": sum(status(c) == "needs_fix" for c in checks), "total": len(checks),
             "needs_recheck": sum(status(c) == "needs_recheck" for c in checks),
-            "note": "These are recorded checks, not a guarantee that every feature is correct."}
+            "note": "Check results come from actual runs. The agent links checks to features; those links still need review."}
