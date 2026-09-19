@@ -186,6 +186,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = app.add_project(body.get("name", ""), body.get("path", ""))
             elif path == "/api/storage":
                 result = app.storage(body.get("path"))
+            elif path == "/api/retry-project-migration":
+                result = app.retry_project_migration()
             elif path == "/api/open-folder":
                 if body.get("project_id"):
                     folder = app.project(body["project_id"])[1].root

@@ -59,6 +59,7 @@ id("app").innerHTML = `
       <div class="topbar-actions"><button id="trackTask" class="text-button" title="Open live run monitor">Monitor <span id="headerRunStatus">Ready</span></button><button class="icon-button details-toggle" id="detailsButton" aria-label="Show activity panel"><span data-icon="panel"></span></button></div>
     </header>
     <div id="missingProjectsNotice" class="missing-projects-notice" role="status" hidden><span id="missingProjectsText"></span><button id="findProjectFolder" class="button secondary">Find folder</button></div>
+    <div id="pendingMigrationNotice" class="missing-projects-notice" role="status" hidden><span>Some projects are waiting to move. You can keep working in another project.</span><button id="showProjectMigration" class="button secondary">Review project move</button></div>
     <div class="work-area">
       <section class="main-column">
         <div id="buildView" class="page-view build-view">
@@ -147,6 +148,11 @@ id("app").innerHTML = `
 <dialog id="projectDialog"><div class="dialog-header"><div><span class="eyebrow">YOUR FILES</span><h2>Add a project</h2></div><button class="icon-button" data-close="projectDialog" aria-label="Close project dialog"><span data-icon="close"></span></button></div><form id="projectForm"><label for="projectName">Project name</label><input id="projectName" required maxlength="100" placeholder="My next project"><label for="projectFolder">Existing folder <span>Optional</span></label><div class="folder-input"><input id="projectFolder" placeholder="Leave blank to create a new folder"><button type="button" id="browseFolder" class="button secondary">Browse</button></div><p class="settings-note">A new folder is created when you leave this blank. Existing files are preserved.</p><div id="projectError" class="inline-result" hidden></div><div class="dialog-actions"><button type="submit" class="button primary" id="saveProject">Open project</button></div></form></dialog>
 <dialog id="undoDialog"><div class="dialog-header"><h2>Undo these file changes?</h2><button class="icon-button" data-close="undoDialog" aria-label="Close rollback dialog"><span data-icon="close"></span></button></div><p class="dialog-intro">Restore files edited by this task. Later changes are protected. Shell commands and external actions cannot be undone here.</p><ul id="undoFiles"></ul><div class="dialog-actions"><button class="button secondary" data-close="undoDialog">Cancel</button><button class="button danger" id="confirmUndo">Undo file changes</button></div></dialog>
 <dialog id="storageDialog"><div class="dialog-header"><div><span class="eyebrow">LOCAL DEVICE STORAGE</span><h2>Your data folder</h2></div><button class="icon-button" data-close="storageDialog" aria-label="Close storage settings"><span data-icon="close"></span></button></div><p class="dialog-intro">New projects live in the PROJECTS folder inside SPARKLE CODER. Saved tasks stay with each project. Settings live in APP_DATA beside PROJECTS. Choose an empty folder to move managed data there. Existing projects outside this folder stay in their current locations.</p><label for="projectsPath">Your projects folder</label><input id="projectsPath" readonly><button id="openProjectsDirectory" class="button secondary projects-open">Open PROJECTS folder</button><p id="storageMigration" class="settings-note" hidden></p><label for="storagePath">Settings and managed data <span>Advanced: choose another location</span></label><div class="folder-input"><input id="storagePath"><button id="browseStorage" class="button secondary">Browse</button></div><div class="storage-links"><button id="openStorage" class="text-button">Open current folder ↗</button><button id="copyStoragePath" class="text-button">Copy current path</button></div><p class="settings-note">Switching folders copies data first and keeps the original as a backup. API keys remain in memory.</p><div id="storageResult" class="inline-result" hidden></div><div class="dialog-actions"><button id="saveStorage" class="button primary">Copy data and use this folder</button></div></dialog>
+<dialog id="migrationDialog"><div class="dialog-header"><h2>Projects waiting to move</h2><button class="icon-button" data-close="migrationDialog" aria-label="Close project move details"><span data-icon="close"></span></button></div>
+  <p class="dialog-intro">These projects are still in their original folders. If another app is using them, finish its task and use Quit app in that window. Then retry below. You can use other projects while you wait.</p>
+  <div id="pendingMigrationProjects"></div><div id="migrationResult" class="inline-result" role="status" hidden></div>
+  <p class="settings-note">SPARKLE recovers a leftover lock only when it can confirm that its process has stopped. It keeps active or uncertain locks and preserves your files.</p>
+  <div class="dialog-actions"><button id="retryProjectMigration" class="button primary">Retry project move</button></div></dialog>
 <dialog id="reconnectDialog"><div class="dialog-header"><h2>Find your project folder</h2><button class="icon-button" data-close="reconnectDialog" aria-label="Close folder recovery"><span data-icon="close"></span></button></div>
   <p class="dialog-intro">The app could not find this folder. It may have moved, or its drive may be disconnected. Your saved project entry is kept. You can keep working in another project while you look for it.</p>
   <form id="reconnectForm"><label for="missingProjectSelect">Project to reconnect</label><select id="missingProjectSelect"></select>
@@ -202,11 +208,12 @@ function setTab(name) { tab = name; ["activity","changes","checks"].forEach(t =>
 
 function renderProjects() {
   id("projectSelect").replaceChildren();
-  appState.projects.forEach(p => { const option = node("option","",p.name+(p.available===false?" (folder not found)":"")); option.value=p.id; option.selected=p.id===projectId; id("projectSelect").append(option); });
+  appState.projects.forEach(p => { const option = node("option","",p.name+(p.migration_pending?" (waiting to move)":p.available===false?" (folder not found)":"")); option.value=p.id; option.selected=p.id===projectId; id("projectSelect").append(option); });
   const project = appState.projects.find(p=>p.id===projectId);
   id("projectPath").textContent = project ? project.path : "";
   id("projectPath").title = project ? project.path : "";
-  const missing=appState.projects.filter(p=>p.available===false);
+  const missing=appState.projects.filter(p=>p.available===false&&!p.migration_pending);
+  id("pendingMigrationNotice").hidden=!appState.projects.some(p=>p.migration_pending);
   id("missingProjectsNotice").hidden=missing.length===0;
   id("missingProjectsText").textContent=missing.length===1 ? "One saved project folder could not be found. You can keep working and reconnect it later." : missing.length+" saved project folders could not be found. You can keep working and reconnect them later.";
 }
@@ -227,6 +234,7 @@ function renderControls() {
   id("stopButton").hidden=!working; id("stopButton").disabled=currentRun?.status==="stopping";
   id("projectSelect").disabled=!!working || transferBusy; id("addProject").disabled=!!working||transferBusy; id("newTask").disabled=!!working||transferBusy;
   id("findProjectFolder").disabled=!!working||transferBusy;
+  id("showProjectMigration").disabled=!!working||transferBusy;
   const status=working ? currentRun.status : currentSession?.status;
   id("runStatus").textContent=currentRun?.mode==="demo" && working ? "Demo · "+friendly(status) : friendly(status);
   id("runStatus").className="status-badge "+(status||"");
@@ -401,7 +409,7 @@ async function loadHistory() {
 }
 async function loadSession(sessionId) { if(busy()) { toast("Finish or stop the current task first."); return; } currentRun=null; runEvents=[]; const data=await api("/projects/"+projectId+"/sessions/"+sessionId); runEvents=data.events||[]; id("taskMode").value=data.task_mode||"build"; renderSession(data); id("verifyCommands").value=(data.required_checks||[]).join("\n"); changeView("build"); if(tab==="changes")await loadChanges(); }
 async function newTask() { if(busy()||transferBusy)return; currentRun=null; runEvents=[]; id("taskMode").value="build"; renderSession(null); id("goal").value=""; id("verifyCommands").value=""; id("verificationFields").hidden=true; changeView("build"); setTab("activity"); id("goal").focus(); }
-async function selectProject(next) { if(busy()||transferBusy)return; if(appState.projects.find(p=>p.id===next)?.available===false){renderProjects();openReconnect(next);return;} await api("/select-project",{project_id:next}); projectId=next; selectedFile=""; fileData=null; id("fileSearch").value=""; id("fileName").textContent="Select a file"; id("filePreview").textContent="Select a file to inspect its contents."; renderProjects(); await newTask(); await Promise.all([loadFiles(),loadHistory()]); }
+async function selectProject(next) { if(busy()||transferBusy)return; const project=appState.projects.find(p=>p.id===next); if(project?.migration_pending){renderProjects();openMigration();return;} if(project?.available===false){renderProjects();openReconnect(next);return;} await api("/select-project",{project_id:next}); projectId=next; selectedFile=""; fileData=null; id("fileSearch").value=""; id("fileName").textContent="Select a file"; id("filePreview").textContent="Select a file to inspect its contents."; renderProjects(); await newTask(); await Promise.all([loadFiles(),loadHistory()]); }
 async function refreshState() { appState=await api("/state"); projectId=projectId||appState.selected_project; renderProjects(); renderProvider(); renderExperience(); if(appState.active_run&&!currentRun) { currentRun=appState.active_run; projectId=currentRun.project_id; renderProjects(); schedulePoll(50); } }
 
 function schedulePoll(ms=600) { clearTimeout(pollTimer); pollTimer=setTimeout(()=>action(pollRun),ms); }
@@ -610,6 +618,28 @@ async function uploadSelection(selection) {
   } finally {transferBusy=false;id("cancelImport").hidden=true;id("uploadFiles").value="";id("uploadFolder").value="";await loadFiles();renderControls();}
 }
 function openStorageSettings() {id("storagePath").value=appState.storage.path;id("projectsPath").value=appState.storage.projects_path;id("storageMigration").hidden=!appState.storage.migration;id("storageMigration").textContent=appState.storage.migration?.message||"";id("storageResult").hidden=true;id("storageDialog").showModal();}
+function renderMigrationProjects() {
+  const pending=appState.projects.filter(p=>p.migration_pending);
+  id("pendingMigrationProjects").replaceChildren(...pending.map(p=>{
+    const item=node("div","migration-project");
+    item.append(node("strong","",p.name),node("p","",p.migration_pending),node("p","missing-project-path",p.path));return item;
+  }));
+  id("retryProjectMigration").disabled=!!busy()||transferBusy||!pending.length;
+}
+function openMigration() {
+  if(busy()||transferBusy)return;
+  renderMigrationProjects();id("migrationResult").hidden=true;id("migrationDialog").showModal();
+}
+async function retryProjectMigration() {
+  if(busy()||transferBusy)return;
+  id("retryProjectMigration").disabled=true;id("migrationResult").hidden=false;id("migrationResult").textContent="Checking projects and copying the ones that are ready…";
+  try {
+    const result=await api("/retry-project-migration",{});
+    await refreshState();renderMigrationProjects();
+    id("migrationResult").textContent=result.message+(result.pending?"":" Select your project from the project menu to open it.");
+  } catch(error) {id("migrationResult").textContent=error.message;}
+  finally {renderMigrationProjects();}
+}
 function updateReconnectSelection() {
   const project=appState.projects.find(p=>p.id===id("missingProjectSelect").value);
   id("missingProjectPath").textContent=project?.path||"";
@@ -618,7 +648,7 @@ function updateReconnectSelection() {
 }
 function openReconnect(selected) {
   if(busy()||transferBusy)return;
-  const missing=appState.projects.filter(p=>p.available===false);
+  const missing=appState.projects.filter(p=>p.available===false&&!p.migration_pending);
   if(!missing.length)return;
   id("missingProjectSelect").replaceChildren(...missing.map(p=>{const option=node("option","",p.name);option.value=p.id;return option;}));
   id("missingProjectSelect").value=missing.some(p=>p.id===selected)?selected:missing[0].id;
@@ -664,6 +694,8 @@ id("exportFolder").onclick=()=>{id("exportForm").reset();id("exportResult").hidd
 id("browseExport").onclick=()=>action(()=>chooseFolder("exportPath"));
 id("exportForm").onsubmit=e=>{e.preventDefault();action(async()=>{id("saveExport").disabled=true;id("exportResult").hidden=false;id("exportResult").textContent="Copying project…";try{const result=await api("/projects/"+projectId+"/export-folder",{path:id("exportPath").value});id("exportResult").textContent=result.files+" files copied to "+result.path;}catch(error){id("exportResult").textContent=error.message;}finally{id("saveExport").disabled=false;}});};
 id("storageButton").onclick=openStorageSettings;
+id("showProjectMigration").onclick=openMigration;
+id("retryProjectMigration").onclick=()=>action(retryProjectMigration);
 id("findProjectFolder").onclick=()=>openReconnect();
 id("missingProjectSelect").onchange=updateReconnectSelection;
 id("browseReconnect").onclick=()=>action(()=>chooseFolder("reconnectPath"));

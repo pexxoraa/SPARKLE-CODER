@@ -4,9 +4,21 @@ A local browser app for your personal NVIDIA Nemotron coding agent.
 Chat with the agent, select projects, approve commands, inspect file changes,
 review checks, and resume saved tasks without using a terminal interface.
 
-Version **0.6.1**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
+Version **0.6.2**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
 Python **3.11+** is required once; there are no third-party runtime packages.
 Launchers are included for Windows, macOS, and Linux.
+
+## Startup lock repair in 0.6.2
+
+The migration no longer treats every leftover lock file as an active task.
+SPARKLE recovers a lock when its recorded process has exited. A project with an
+active or uncertain lock stays at its original location while the app opens an
+available project or a separate new one. Choose **Review project move → Retry
+project move** after finishing the task and quitting the older app.
+
+Original project files and saved history are retained. Copies exclude runtime
+locks, and source projects stay locked while being copied. Damaged, linked, or
+unverifiable locks are kept for review. Do not delete lock files to force a move.
 
 ## Startup repair in 0.6.1
 
@@ -291,6 +303,7 @@ remains available in [CLI_REFERENCE.md](CLI_REFERENCE.md).
 | sparkle_coder/explanations.py | Plain-language error and recovery explanations |
 | sparkle_coder/verification.py | Check identities, correction history and evidence status |
 | sparkle_coder/workspace.py | File boundaries, hashes, atomic writes, locking |
+| sparkle_coder/locking.py | Process checks, native lock guards, abandoned-lock recovery |
 | sparkle_coder/execution.py | Command execution, cancellation, limits, Docker option |
 | sparkle_coder/state.py | Sessions, file journal, recovery, undo |
 | tests/ | Behavioral tests with scripted model responses |

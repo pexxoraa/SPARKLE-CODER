@@ -257,8 +257,11 @@ environment because Docker is unavailable there.
   newly created files. It refuses to overwrite later user changes.
 - Undo covers file-tool edits only. Shell edits, package installations, database
   changes, deployments, and external side effects require separate recovery.
-- A crashed process can leave `.nemotron/workspace.lock`. Check its recorded PID
-  and remove the lock only after confirming that the process has stopped.
+- A crashed process can leave `.nemotron/workspace.lock`. SPARKLE checks the
+  recorded PID and recovers the marker only if the process has exited. Active
+  or uncertain owners remain protected. Finish the other task and retry.
+  `.nemotron/workspace.guard` is a persistent native lock guard; do not delete it
+  or force-remove a marker while another app might be using the project.
 - Optional run caps bound work when configured, but are not a hard billing
   guarantee: in-flight requests, retries, and estimated token usage can exceed a cap.
 - Only foreground commands are supported. Browser/integration test scripts must

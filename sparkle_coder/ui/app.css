@@ -31,6 +31,7 @@ dialog{color:#e8ecf1;background:#191f27;border:1px solid #3b4652;border-radius:1
 @media(max-width:700px){.delivery-panel{margin-left:0;padding:15px}.proof-feature{align-items:flex-start;flex-direction:column;gap:3px}.delivery-panel .recovery-actions .button{flex:1}.technical-details{padding:9px}}
 
 .missing-projects-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 24px;background:#292516;border-bottom:1px solid #5c4c27;color:#f4deb0;font-size:.85rem;flex-shrink:0}.missing-projects-notice>span{flex:1;min-width:180px}.missing-project-path{overflow-wrap:anywhere;font-family:var(--mono);font-size:.8rem;color:var(--muted);margin:8px 0 20px}
+.migration-project{border:1px solid var(--line);border-radius:8px;padding:14px;margin:12px 0;font-size:.85rem;overflow-wrap:anywhere}.migration-project p{line-height:1.6}.migration-project .missing-project-path{margin-bottom:0}
 /* The simple view keeps evidence available without filling the main workspace. */
 .experience-button{margin:12px 6px 4px;font-size:12px}
 .simple-mode .work-area{grid-template-columns:minmax(0,1fr)}

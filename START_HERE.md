@@ -1,6 +1,6 @@
 # Open SPARKLE CODER
 
-Version **0.6.1** is a browser interface for your personal coding agent.
+Version **0.6.2** is a browser interface for your personal coding agent.
 Everyday use takes place in the browser: connect a model, select a project,
 describe work, approve commands, inspect files, and continue saved tasks.
 
@@ -18,6 +18,23 @@ tells you to quit it before continuing.
 
 For future updates, quit the app and replace its program files in this same
 folder. Keep **PROJECTS** and **APP_DATA**; they contain your work and settings.
+
+## If you saw “Close the previous app and finish its active task”
+
+Version **0.6.2** fixes migration getting stuck on a leftover task lock. It checks
+whether the recorded process has stopped before recovering that lock.
+
+1. Use **Quit app** in any older SPARKLE CODER window.
+2. Update the program files in your existing app folder. Keep **PROJECTS**,
+   **APP_DATA**, and the older Nemotron Workspace data folder intact.
+3. Open the updated launcher. Confirm **0.6.2** at the bottom of the sidebar.
+4. If you see **Projects waiting to move**, choose **Review project move**. It
+   names the affected project and explains why. After closing its previous app,
+   choose **Retry project move**. Other projects remain usable while you wait.
+
+You do not need to delete lock files. An active or uncertain lock is preserved;
+SPARKLE does not stop another process or guess that an unknown owner has exited.
+If the saved task folder is linked to another location, it is kept for review.
 
 ## If you saw “The old project folder is missing”
 

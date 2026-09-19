@@ -18,7 +18,7 @@ from .demo import DemoProvider, calls, python_command
 from .provider import NemotronClient
 from .monitor import Run, ACTIVE, session_events
 from .files import UserFiles
-from .storage import resolve_storage, relocate, migrate_legacy
+from .storage import resolve_storage, relocate, migrate_legacy, retry_migration
 from .state import Session, now
 from .explanations import check_title, explain_failure, simple_recovery
 from .verification import proof_summary, replacements, active_checks
@@ -124,7 +124,7 @@ class AppService:
         if not self.data["projects"]:
             self.add_project("My project", str(self.projects_directory / "my-project"))
         else:
-            available = [p for p in self.data["projects"] if Path(p["path"]).is_dir()]
+            available = [p for p in self.data["projects"] if Path(p["path"]).is_dir() and not p.get("migration_pending")]
             if not available:
                 # Use a distinct new folder; never recreate a missing project's
                 # path and silently present its empty history as recovered work.
@@ -205,6 +205,8 @@ class AppService:
         root = root.resolve()
         with self.lock:
             existing = next((p for p in self.data["projects"] if Path(p["path"]).resolve() == root), None)
+            if existing and existing.get("migration_pending"):
+                raise ValueError("This project is waiting to move. Choose Retry project move first.")
             workspace = Workspace(root, create=existing is None)
             if existing:
                 self.data["selected_project"] = existing["id"]
@@ -221,6 +223,8 @@ class AppService:
             project = next((p for p in self.data["projects"] if p["id"] == project_id), None)
             if not project:
                 raise ValueError("Project not found.")
+            if project.get("migration_pending"):
+                raise ValueError("This project is waiting to move. Choose Retry project move. " + project["migration_pending"])
             return project, Workspace(Path(project["path"]), create=False)
 
     def reconnect_project(self, project_id, path):
@@ -236,6 +240,8 @@ class AppService:
             project = next((p for p in self.data["projects"] if p["id"] == project_id), None)
             if not project:
                 raise ValueError("Project not found.")
+            if project.get("migration_pending"):
+                raise ValueError("This project is waiting to move. Choose Retry project move first.")
             if Path(project["path"]).is_dir() and root != Path(project["path"]).resolve():
                 raise ValueError("This project is already available. Refresh the app to open it.")
             if any(p["id"] != project_id and Path(p["path"]).resolve() == root for p in self.data["projects"]):
@@ -270,7 +276,7 @@ class AppService:
         with self.lock:
             job = self.active()
             return {"version": __version__, "projects": [
-                        {**p, "available": Path(p["path"]).is_dir()} for p in self.data["projects"]],
+                        {**p, "available": Path(p["path"]).is_dir() and not p.get("migration_pending", False)} for p in self.data["projects"]],
                     "experience": self.data["experience"],
                     "selected_project": self.data["selected_project"],
                     "settings": self.public_settings(), "active_run": job.public() if job else None,
@@ -501,6 +507,12 @@ class AppService:
             if self.active():
                 raise ValueError("Finish or stop the active task before switching data folders.")
             return relocate(self, path)
+
+    def retry_project_migration(self):
+        with self.lock:
+            if self.active():
+                raise ValueError("Finish or stop the active task before moving projects.")
+            return retry_migration(self)
 
     def export_report(self, project_id, session_id):
         snapshot = self.snapshot(project_id, session_id)

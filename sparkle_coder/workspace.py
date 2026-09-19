@@ -10,6 +10,8 @@ import re
 import stat
 import tempfile
 
+from .locking import LockError, workspace_lock
+
 
 class WorkspaceError(ValueError):
     pass
@@ -180,19 +182,8 @@ class Workspace:
 
     @contextmanager
     def lock(self):
-        path = self.state_dir / "workspace.lock"
-        if path.is_symlink():
-            raise WorkspaceError("Workspace lock must not be a symlink.")
         try:
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except FileExistsError:
-            raise WorkspaceError(
-                "Workspace is locked by another run. If it crashed, check the PID in "
-                ".nemotron/workspace.lock and remove that file only after the process has stopped."
-            ) from None
-        try:
-            with os.fdopen(fd, "w") as stream:
-                stream.write(str(os.getpid()))
-            yield
-        finally:
-            path.unlink(missing_ok=True)
+            with workspace_lock(self.state_dir) as status:
+                yield status
+        except LockError as exc:
+            raise WorkspaceError(str(exc)) from None

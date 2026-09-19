@@ -8,6 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, "../sparkle_coder/ui/app.js"
 const sections = [
   source.slice(source.indexOf("function renderProjects("), source.indexOf("function renderProvider(")),
   source.slice(source.indexOf("async function selectProject("), source.indexOf("async function refreshState(")),
+  source.slice(source.indexOf("function renderMigrationProjects("), source.indexOf("function updateReconnectSelection(")),
   source.slice(source.indexOf("function updateReconnectSelection("), source.indexOf('id("trackTask").onclick=')),
 ].join("\n");
 class Element {
@@ -22,7 +23,7 @@ const elements = new Map();
 const id = name => {if(!elements.has(name))elements.set(name,node("div"));return elements.get(name);};
 
 async function check() {
-  let working=false, error="Folder not found. Choose an existing folder.", loads=0;
+  let working=false, error="Folder not found. Choose an existing folder.", loads=0, retryReady=false;
   const requests=[], toasts=[];
   const state={projects:[{id:"ready",name:"New project",path:"/app/PROJECTS/new",available:true},
     {id:"missing",name:"Old project",path:"/old/Projects/my-project",available:false}],selected_project:"ready"};
@@ -34,13 +35,17 @@ async function check() {
       return state.projects[1];
     }
     if(route==="/state")return state;
+    if(route==="/retry-project-migration") {
+      if(retryReady){state.projects[1].migration_pending=undefined;state.projects[1].available=true;state.projects[1].path="/app/PROJECTS/recovered";}
+      return {copied:retryReady?1:0,pending:retryReady?0:1,message:retryReady?"Project copied. Original kept.":"Finish the previous task and retry."};
+    }
     if(route==="/select-project")return {selected_project:body.project_id};
     throw new Error("Unexpected request: "+route);
   };
   const ui=new Function("id","node","api","busy","toast","loadFiles","loadHistory","newTask","initial",
     'let appState=initial,projectId="ready",transferBusy=false,selectedFile="",fileData=null;\n'+sections+
     '\nasync function refreshState(){appState=await api("/state");renderProjects();}\n'+
-    'return {renderProjects,openReconnect,reconnectProject,selectProject,selected:()=>projectId};')(
+    'return {renderProjects,openReconnect,reconnectProject,selectProject,retryProjectMigration,selected:()=>projectId};')(
       id,node,api,()=>working,message=>toasts.push(message),async()=>loads++,async()=>loads++,async()=>{},state);
   ui.renderProjects();
   assert.equal(id("missingProjectsNotice").hidden,false);
@@ -72,6 +77,33 @@ async function check() {
   assert.equal(toasts.length,1);
   assert.match(toasts[0],/Project reconnected/);
   assert(requests.some(r=>r.route==="/projects/missing/reconnect"&&r.body.path==="/found/project"));
-  console.log("Project recovery UI: notice, selection, inline failure, active-task guard, and successful reconnect passed.");
+  await ui.selectProject("ready");
+  state.projects[1].available=false;state.projects[1].migration_pending="This project is locked by a running app.";
+  ui.renderProjects();
+  assert.equal(id("missingProjectsNotice").hidden,true);
+  assert.equal(id("pendingMigrationNotice").hidden,false);
+  assert.match(id("projectSelect").children[1].text,/waiting to move/);
+  await ui.selectProject("missing");
+  assert.equal(ui.selected(),"ready");
+  assert.equal(id("migrationDialog").open,true);
+  assert.equal(id("pendingMigrationProjects").children.length,1);
+  assert.match(id("pendingMigrationProjects").children[0].children[1].text,/locked by a running app/);
+  working=true;
+  const beforeRetry=requests.length;
+  await ui.retryProjectMigration();
+  assert.equal(requests.length,beforeRetry);
+  working=false;
+  await ui.retryProjectMigration();
+  assert.match(id("migrationResult").textContent,/Finish the previous task/);
+  assert.equal(id("retryProjectMigration").disabled,false);
+  retryReady=true;
+  await ui.retryProjectMigration();
+  assert.equal(id("pendingMigrationNotice").hidden,true);
+  assert.equal(id("pendingMigrationProjects").children.length,0);
+  assert.equal(id("retryProjectMigration").disabled,true);
+  assert.match(id("migrationResult").textContent,/project menu/);
+  await ui.selectProject("missing");
+  assert.equal(ui.selected(),"missing");
+  console.log("Project recovery UI: missing folders, pending moves, guarded retries, inline errors, and recovered selections passed.");
 }
 check().catch(error=>{console.error(error);process.exitCode=1;});

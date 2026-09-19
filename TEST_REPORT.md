@@ -1,16 +1,51 @@
-# Validation report — SPARKLE CODER 0.6.1
+# Validation report — SPARKLE CODER 0.6.2
 
-Validated on Linux with Python 3.12.14 on 2026-09-18.
+Validated on Linux with Python 3.12.14 on 2026-09-19.
 
-**137 automated Python tests passed, with no failures, errors, or skips.**
+**152 automated Python tests passed, with no failures, errors, or skips.**
 The complete output is in [TEST_RESULTS.txt](TEST_RESULTS.txt). All three JavaScript
 scripts passed: `tests/test_ui_client.js`, `tests/test_ui_explanations.js`, and
 `tests/test_ui_project_recovery.js`.
 Model replies in tests are scripted; no live NVIDIA key or inference server was available.
 
-## Startup and missing-folder repair
+## Abandoned-lock recovery and startup migration
 
-Nine new Python tests reproduce and verify the startup repair:
+Fifteen new Python tests exercise the lock-related startup failure:
+
+- A real child process holds a workspace, is terminated by the test, and leaves
+  its PID marker. The next run recovers the lock and preserves project files.
+- Two independent child processes compete for one stale lock. Exactly one owns
+  it; the other is refused until the owner releases it.
+- Legacy markers with exited PIDs are recovered. Live, malformed, or unverifiable
+  owners remain protected. Permission failures are not treated as dead processes.
+- Symlinked and hard-linked markers/guards do not modify their targets. Cleanup
+  does not remove a replacement marker.
+- A busy legacy project is deferred while startup opens another project. Retrying
+  after release copies its files and saved history without changing its ID or
+  original settings. Pending entries survive restarting the app.
+- Linked task folders and unknown owners stay deferred. Real copy failures retain
+  the original files and current settings; a later retry succeeds.
+- Source locks remain held during copying. Runtime markers and guards are absent
+  from migrated and relocated copies.
+- The actual Linux `Open_SPARKLE_CODER.pyw` launcher starts against a temporary
+  legacy Nemotron Workspace containing an abandoned lock. Its local HTTP state
+  reports recovery, saved history is accessible, and Quit app exits successfully.
+- The retry route requires the launch token, rejects another origin, and refuses
+  migration during a running task.
+
+The Windows process-handle branch was tested with mocked API results for exited,
+live, missing, and inaccessible processes. It was not executed on Windows. Native
+Windows/macOS locking and network-filesystem behavior still need platform testing.
+PID reuse is conservative: a live PID is not reclaimed even if it belongs to a
+different process now. Unknown lock contents are preserved for review.
+
+The recovery UI script also verifies distinct notices for missing folders and
+pending moves, in-app retry results, selection after recovery, and active-task
+guards. These use a DOM double; native browser rendering was not tested.
+
+## Missing-folder repair retained from 0.6.1
+
+Nine Python tests reproduce and verify the missing-folder startup repair:
 
 - A legacy registration pointing to a missing `Projects/my-project` folder opens
   successfully. Its ID, name, and original path survive. Original settings remain
@@ -81,11 +116,12 @@ finding tools from verifying software. They do not validate visual layout.
 ## Static and packaging checks
 
 - Python source/test AST parsing and JavaScript syntax checks passed.
-- 199 UI IDs, including the HTML shell, are unique; no literal ID references are missing.
+- 205 UI IDs, including the HTML shell, are unique; no literal ID references are missing.
 - Linux and macOS launcher shell syntax and macOS plist version checks passed.
 - An offline package build and isolated install succeeded with no runtime
   dependencies. Installed source and UI files match the validated source.
-- The installed 0.6.1 package imports successfully in isolated Python.
+- The installed 0.6.2 package imports successfully in isolated Python, including
+  the new locking module. All 27 installed source/UI files match the source tree.
 - `git diff --check` passed.
 
 ## Remaining limits

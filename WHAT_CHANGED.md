@@ -1,4 +1,23 @@
-# SPARKLE CODER 0.6.1 — open the app when an old project is missing
+# SPARKLE CODER 0.6.2 — recover abandoned locks and keep startup usable
+
+The “Close the previous app and finish its active task” migration popup came from
+checking whether a lock file existed without checking whether its process still
+ran. Migration and workspace operations now recover a PID lock only when its
+owner is confirmed to have exited. A native file guard serializes recovery so
+two app processes cannot reclaim the same workspace concurrently.
+
+Active, uncertain, or linked locks are preserved. Migration keeps affected
+projects at their original paths, opens another project, and offers **Review
+project move → Retry project move** inside the app. Retrying preserves project
+IDs and saved history. Source locks are held while copying, and runtime lock
+files are excluded from the copies. The same recovery applies when changing
+device storage. Invalid task-history content and real copy failures are still
+reported; they are not silently converted into successful moves.
+
+See TEST_REPORT.md for actual process-crash, concurrency, and Linux source-launcher
+coverage. Native Windows/macOS execution remains unverified.
+
+## 0.6.1 — open the app when an old project is missing
 
 Fixed the startup failure “Projects could not be moved ... The old project folder
 is missing.” Missing registrations keep their identity and original path while
