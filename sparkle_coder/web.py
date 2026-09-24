@@ -15,12 +15,29 @@ import webbrowser
 
 from .webapp import AppService, default_app_dir, legacy_app_dirs
 from .files import UserFiles
+from .picker import choose_folder
 from . import __version__
 from .workspace import Redactor, write_json
 
 
 STATIC = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"),
           "/app.css": ("app.css", "text/css"), "/favicon.svg": ("favicon.svg", "image/svg+xml")}
+
+
+def website_origin(value):
+    if not isinstance(value, str) or len(value) > 2048:
+        raise ValueError("Paste your SPARKLE CODER website address.")
+    parsed = urlsplit(value.strip())
+    local = parsed.hostname in ("127.0.0.1", "localhost")
+    if (not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.path not in ("", "/") or any(c.isspace() for c in value)
+            or (parsed.scheme != "https" and not (local and parsed.scheme == "http"))
+            or parsed.hostname == "null" or "*" in parsed.netloc):
+        raise ValueError("Use the HTTPS home address of your SPARKLE CODER website, without a path or sign-in details.")
+    port = parsed.port  # Validates the port instead of accepting malformed origins.
+    default = 443 if parsed.scheme == "https" else 80
+    hostname = parsed.hostname.encode("idna").decode("ascii")
+    return f"{parsed.scheme}://{hostname}" + (f":{port}" if port and port != default else "")
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -33,6 +50,18 @@ class LocalServer(ThreadingHTTPServer):
         self.origin = f"http://127.0.0.1:{self.server_port}"
         self.hosts = {f"127.0.0.1:{self.server_port}", f"localhost:{self.server_port}"}
         self.origins = {"http://" + host for host in self.hosts}
+        self.hosted_origin = None
+        self.hosted_token = None
+        self.pairing_lock = threading.RLock()
+
+    def pair_website(self, url):
+        origin = website_origin(url)
+        with self.pairing_lock:
+            self.hosted_origin = origin
+            self.hosted_token = secrets.token_urlsafe(32)
+            # Fragments never go to Vercel or appear in HTTP request logs.
+            return {"origin": origin, "url": origin + "/#engine=" + quote(self.origin, safe="")
+                    + "&token=" + quote(self.hosted_token, safe="")}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -51,6 +80,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         for name, value in (extra_headers or {}).items():
             self.send_header(name, value)
+        origin = self.headers.get("Origin")
+        if origin and origin == self.server.hosted_origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -70,17 +103,34 @@ class Handler(BaseHTTPRequestHandler):
             self.send(403, {"error": "Unrecognized host."})
             return False
         origin = self.headers.get("Origin")
-        if origin and origin not in self.server.origins:
+        hosted = bool(origin and origin == self.server.hosted_origin)
+        if origin and origin not in self.server.origins and not (api and hosted):
             self.send(403, {"error": "Cross-origin requests are not allowed."})
             return False
-        if self.headers.get("Sec-Fetch-Site") == "cross-site" and api:
+        if self.headers.get("Sec-Fetch-Site") == "cross-site" and api and not hosted:
             self.send(403, {"error": "Cross-site API requests are not allowed."})
             return False
-        if api and not secrets.compare_digest(self.headers.get("X-Sparkle-Token", "").encode("utf-8"),
-                                              self.server.token.encode("utf-8")):
+        expected = self.server.hosted_token if hosted else self.server.token
+        if api and (not expected or not secrets.compare_digest(self.headers.get("X-Sparkle-Token", "").encode("utf-8"),
+                                                               expected.encode("utf-8"))):
             self.send(401, {"error": "Reopen the app using its desktop launcher to reconnect."})
             return False
         return True
+
+    def do_OPTIONS(self):
+        origin = self.headers.get("Origin")
+        requested_headers = {name.strip().lower() for name in self.headers.get("Access-Control-Request-Headers", "").split(",") if name.strip()}
+        if (self.headers.get("Host") not in self.server.hosts or not urlsplit(self.path).path.startswith("/api/")
+                or not origin or origin != self.server.hosted_origin
+                or self.headers.get("Access-Control-Request-Method") not in ("GET", "POST")
+                or requested_headers - {"content-type", "x-sparkle-token"}):
+            self.send(403, {"error": "Connect this website from the local SPARKLE CODER app first."})
+            return
+        headers = {"Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "Content-Type, X-Sparkle-Token",
+                   "Access-Control-Max-Age": "60"}
+        if self.headers.get("Access-Control-Request-Private-Network") == "true":
+            headers["Access-Control-Allow-Private-Network"] = "true"
+        self.send(204, "", "text/plain", headers)
 
     def download(self, data, name, content_type="application/octet-stream"):
         self.send(200, data, content_type, {"Content-Disposition": "attachment; filename*=UTF-8''" + quote(name, safe="")})
@@ -100,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/state":
                 result = app.state()
+                result["hosted_ui"] = {"origin": self.server.hosted_origin}
             elif len(parts) == 3 and parts[:2] == ["api", "runs"]:
                 job = app.job(parts[2])
                 result = job.public(int(query.get("after", ["0"])[0]))
@@ -176,7 +227,20 @@ class Handler(BaseHTTPRequestHandler):
             path = urlsplit(self.path).path
             parts = path.strip("/").split("/")
             app = self.server.service
-            if path == "/api/settings":
+            if path == "/api/hosted-ui":
+                if self.headers.get("Origin") not in self.server.origins or self.headers.get("Sec-Fetch-Site") == "cross-site":
+                    self.send(403, {"error": "Approve the website from the local SPARKLE CODER app."})
+                    return
+                result = self.server.pair_website(body.get("url"))
+            elif path == "/api/disconnect-hosted-ui":
+                origin = self.headers.get("Origin")
+                cors = {"Access-Control-Allow-Origin": origin, "Vary": "Origin"} if origin == self.server.hosted_origin else {}
+                with self.server.pairing_lock:
+                    self.server.hosted_origin = None
+                    self.server.hosted_token = None
+                self.send(200, {"disconnected": True}, extra_headers=cors)
+                return
+            elif path == "/api/settings":
                 result = app.configure(body)
             elif path == "/api/experience":
                 result = app.experience(body.get("experience"))
@@ -208,13 +272,7 @@ class Handler(BaseHTTPRequestHandler):
                     app.save()
                 result = {"selected_project": body["project_id"]}
             elif path == "/api/select-folder":
-                process = subprocess.run([sys.executable, str(Path(__file__).with_name("picker.py"))],
-                                         capture_output=True, text=True, timeout=120,
-                                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-                try:
-                    result = json.loads(process.stdout)
-                except ValueError:
-                    result = {"error": "Folder chooser is unavailable. Paste the folder path instead."}
+                result = choose_folder()
             elif path == "/api/demo":
                 result = app.demo()
             elif path == "/api/runs":

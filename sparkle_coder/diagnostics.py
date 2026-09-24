@@ -5,10 +5,11 @@ import json
 from pathlib import PurePosixPath
 import platform
 import shutil
-import sys
 from urllib.parse import urlsplit
 
 from .checks import discover_checks, package_manager
+from .config import HOSTS_REQUIRING_A_KEY
+from .python_runtime import python_argv, shell_command
 from .state import now
 
 
@@ -32,9 +33,9 @@ def inspect_setup(workspace, config, connection_tested=False):
         items.append({"id": identity, "title": title, "status": status,
                       "detail": detail, "next_step": next_step})
 
-    hosted = urlsplit(config.base_url).hostname == "integrate.api.nvidia.com"
+    hosted = urlsplit(config.base_url).hostname in HOSTS_REQUIRING_A_KEY
     if hosted and not config.api_key:
-        add("connection", "Nemotron connection", "attention", "The NVIDIA API key has not been added.",
+        add("connection", "Nemotron connection", "attention", "The API key has not been added.",
             "Open Connect Nemotron, paste your API key, then choose Test connection.")
     elif connection_tested:
         add("connection", "Nemotron connection", "found", "The selected model was listed by this endpoint during this app session.",
@@ -64,7 +65,7 @@ def inspect_setup(workspace, config, connection_tested=False):
                 need("node", "Node.js", manifest)
             need(manager, manager + " package manager", manifest)
         elif name in ("pyproject.toml", "requirements.txt", "setup.cfg", "pytest.ini"):
-            need("__python__", "Python used by SPARKLE CODER", manifest)
+            need("__python__", "Project Python interpreter", manifest)
         elif name == "Cargo.toml":
             need("cargo", "Rust toolchain", manifest)
         elif name == "go.mod":
@@ -87,10 +88,9 @@ def inspect_setup(workspace, config, connection_tested=False):
                 "Host tools do not prove container readiness. Ask the agent to check the selected image.")
     else:
         for (command, title), sources in needed.items():
-            found = sys.executable if command == "__python__" else shutil.which(command)
+            python = python_argv(workspace.root) if command == "__python__" else None
+            found = (shell_command(python) if python else None) if command == "__python__" else shutil.which(command)
             detail = ("Found: " + found if found else "Not found on the PATH used by SPARKLE CODER.")
-            if command == "__python__":
-                detail += " · " + platform.python_version()
             add("tool:" + command, title, "found" if found else "attention", detail,
                 ("Used by " + ", ".join(sources[:3]) + ". Versions and dependencies still need checking.") if found
                 else "Install or enable " + title + ", then reopen SPARKLE CODER and check setup again.")

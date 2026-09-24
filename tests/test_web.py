@@ -79,6 +79,26 @@ class WebTests(unittest.TestCase):
         self.assertEqual(status, 200, result)
         return result
 
+    def test_connection_does_not_query_balance_on_nvidia_or_custom_servers(self):
+        provider = FakeProvider(Config())
+        with patch.object(provider, "balance", create=True) as balance:
+            self.app.provider_factory = lambda _: provider
+            for endpoint in ("https://integrate.api.nvidia.com/v1", "http://127.0.0.1:8000/v1"):
+                self.app.configure({"base_url": endpoint, "api_key": "test-key"})
+                self.assertTrue(self.app.connect()["connected"])
+            balance.assert_not_called()
+
+    def test_configured_gateway_exposes_balance_and_one_url_for_ui(self):
+        gateway = "https://my-gateway.example/v1"
+        provider = FakeProvider(Config())
+        with patch("sparkle_coder.webapp.SPARKLE_GATEWAY_URL", gateway), \
+             patch.object(provider, "balance", return_value={"balance_tokens": 42}, create=True) as balance:
+            self.app.provider_factory = lambda _: provider
+            self.app.configure({"base_url": gateway, "api_key": "test-key"})
+            self.assertEqual(self.app.connect()["balance_tokens"], 42)
+            self.assertEqual(self.app.public_settings()["cloud_gateway_url"], gateway)
+            balance.assert_called_once()
+
     def await_run(self, run_id, statuses):
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
@@ -308,7 +328,7 @@ class LauncherTests(unittest.TestCase):
                     connection.request("GET", "/api/state", headers={"X-Sparkle-Token": info["token"]})
                     response = connection.getresponse()
                     self.assertEqual(response.status, 200)
-                    self.assertEqual(json.loads(response.read())["version"], "0.6.2")
+                    self.assertEqual(json.loads(response.read())["version"], "0.6.3")
                     connection.request("POST", "/api/quit", body="{}", headers={
                         "X-Sparkle-Token": info["token"], "Content-Type": "application/json"})
                     response = connection.getresponse()

@@ -95,21 +95,24 @@ class NemotronClient:
     def bind_runtime(self, observe, should_stop):
         self.observe, self.should_stop = observe, should_stop
 
-    def _read(self, request):
+    def _read(self, request, *, timeout=None):
         # A cancelled request may finish at the provider, but its response cannot
         # execute tools. The run itself stops promptly, even during a slow socket read.
         completed = queue.Queue(maxsize=1)
         def fetch():
             try:
-                with self.opener.open(request, timeout=self.config.request_timeout) as response:
+                with self.opener.open(request, timeout=self.config.request_timeout if timeout is None else timeout) as response:
                     result = response.read(12_000_001)
             except Exception as exc:
                 if isinstance(exc, urllib.error.HTTPError):
                     exc.close()
                 result = exc
             completed.put(result)
+        deadline = None if timeout is None else time.monotonic() + timeout
         threading.Thread(target=fetch, name="nemotron-http", daemon=True).start()
         while not self.should_stop():
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("Optional endpoint response timed out.")
             try:
                 result = completed.get(timeout=0.1)
             except queue.Empty:
@@ -157,13 +160,14 @@ class NemotronClient:
                     continue
                 hints = {
                     401: "Open Connect Nemotron, replace the API key, test the connection, then resume this task.",
+                    402: "Out of credits. Open Connect Nemotron to check your balance and top up.",
                     403: "Check model access and endpoint permissions.",
                     404: "Check the base URL and exact model ID.",
                     400: "Check model tool support and extra_body; try JSON tool mode for a server without a tool parser.",
                     429: "The endpoint is rate-limited; resume this session later.",
                 }
                 raise ModelError(f"Model API HTTP {exc.code}. {hints.get(exc.code, 'The endpoint is unavailable. Resume this saved task when it recovers.')}",
-                                 action="connection" if exc.code in (400, 401, 403, 404) else "retry") from None
+                                 action="connection" if exc.code in (400, 401, 402, 403, 404) else "retry") from None
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 if attempt < 2:
                     delay = 2 ** attempt
@@ -185,6 +189,23 @@ class NemotronClient:
             raise ModelError("The /models endpoint did not return a model list.")
         return sorted(item["id"] for item in data["data"]
                       if isinstance(item, dict) and isinstance(item.get("id"), str))
+
+    def balance(self) -> dict | None:
+        # Optional metadata must not inherit the model's long timeout/retries.
+        headers = {"Accept": "application/json"}
+        if self.config.api_key:
+            headers["Authorization"] = "Bearer " + self.config.api_key
+        try:
+            request = urllib.request.Request(self.config.base_url.rstrip("/") + "/balance", headers=headers)
+            raw = self._read(request, timeout=3)
+            if len(raw) > 65536:
+                return None
+            data = json.loads(raw)
+        except (ModelError, OSError, ValueError):
+            return None
+        if isinstance(data, dict) and type(data.get("balance_tokens")) is int and data["balance_tokens"] >= 0:
+            return data
+        return None
 
     def complete(self, messages: list[dict], schemas: list[dict]) -> Completion:
         if self.config.tool_format == "json":

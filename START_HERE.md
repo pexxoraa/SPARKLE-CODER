@@ -1,8 +1,29 @@
 # Open SPARKLE CODER
 
-Version **0.6.2** is a browser interface for your personal coding agent.
+Version **0.6.3** is a browser interface for your personal coding agent.
 Everyday use takes place in the browser: connect a model, select a project,
 describe work, approve commands, inspect files, and continue saved tasks.
+
+## Using a hosted website
+
+1. Open the updated desktop app on the computer containing your projects.
+2. Choose **Connect website** in its sidebar.
+3. Paste the home address of your deployed SPARKLE website, then choose
+   **Connect and open website**. If the browser blocks the new tab, use
+   **Open connected website** in the same dialog.
+4. Allow local-network access if your browser asks. Keep the desktop app running.
+5. After restarting the engine, connect again. Use **Disconnect website** to
+   revoke its access while keeping the local app and your saved projects.
+
+The connection link is private. Do not share it. The website must be open in a
+browser on the same computer as the app; it cannot control another computer or
+work while that computer is off. If browser restrictions prevent connection,
+use the local app directly. Publishing instructions are in DEPLOYMENT_GUIDE.md.
+
+Packaged builds include Python for the interface. To run Python projects or
+the offline demo, install Python 3.11+ and enable it on PATH. A project's
+`.venv` or `venv` is preferred when present. Advanced users can set
+`SPARKLE_PYTHON` to an installed interpreter's full path.
 
 ## Upgrading from the previous version
 
@@ -27,7 +48,7 @@ whether the recorded process has stopped before recovering that lock.
 1. Use **Quit app** in any older SPARKLE CODER window.
 2. Update the program files in your existing app folder. Keep **PROJECTS**,
    **APP_DATA**, and the older Nemotron Workspace data folder intact.
-3. Open the updated launcher. Confirm **0.6.2** at the bottom of the sidebar.
+3. Open the updated launcher. Confirm **0.6.3** at the bottom of the sidebar.
 4. If you see **Projects waiting to move**, choose **Review project move**. It
    names the affected project and explains why. After closing its previous app,
    choose **Retry project move**. Other projects remain usable while you wait.

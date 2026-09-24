@@ -5,20 +5,21 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 import threading
 import uuid
 from urllib.parse import urlsplit
 
 from . import __version__
 from .agent import Agent
-from .config import Config, load_config
+from .config import Config, load_config, SPARKLE_GATEWAY_URL
 from .brief import read_brief, save_brief
 from .diagnostics import inspect_setup
 from .demo import DemoProvider, calls, python_command
 from .provider import NemotronClient
 from .monitor import Run, ACTIVE, session_events
 from .files import UserFiles
-from .storage import resolve_storage, relocate, migrate_legacy, retry_migration
+from .storage import resolve_storage, relocate, migrate_legacy, retry_migration, reconnect_portable_projects
 from .state import Session, now
 from .explanations import check_title, explain_failure, simple_recovery
 from .verification import proof_summary, replacements, active_checks
@@ -26,6 +27,12 @@ from .workspace import Redactor, Workspace, clean_terminal, write_json
 
 
 def application_root() -> Path:
+    if getattr(sys, "frozen", False):
+        # Packaged with PyInstaller: __file__ points inside a temporary
+        # extraction directory that's deleted when the app closes, so
+        # PROJECTS/ and APP_DATA/ must live next to the real executable
+        # instead, or every tester's data would vanish between runs.
+        return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent.parent
 
 
@@ -87,16 +94,12 @@ class AppService:
         migrated = False
         if self.settings_path.exists():
             saved = json.loads(self.settings_path.read_text("utf-8"))
+            migrated = reconnect_portable_projects(saved, self.projects_directory)
             self.data["settings"].update({k: v for k, v in saved.get("settings", {}).items() if k in SETTINGS})
             self.data["projects"] = saved.get("projects", [])
             self.data["selected_project"] = saved.get("selected_project")
             if saved.get("experience") in ("simple", "advanced"):
                 self.data["experience"] = saved["experience"]
-            if saved.get("projects_path"):
-                selected_projects = Path(saved["projects_path"])
-                if not selected_projects.is_absolute():
-                    raise ValueError("The saved projects folder must have an absolute path.")
-                self.projects_directory = selected_projects
             if saved.get("storage_migration"):
                 self.data["storage_migration"] = saved["storage_migration"]
             saved_version = saved.get("settings_version", 1)
@@ -155,7 +158,7 @@ class AppService:
 
     def public_settings(self):
         config = self.config()
-        return {**self.data["settings"], "key_configured": bool(config.api_key),
+        return {**self.data["settings"], "cloud_gateway_url": SPARKLE_GATEWAY_URL, "key_configured": bool(config.api_key),
                 "key_source": ("memory" if config.base_url.rstrip("/") in self.keys else "environment") if config.api_key else "none",
                 "connected": self.connected_endpoint == (config.base_url, config.model)}
 
@@ -185,12 +188,19 @@ class AppService:
     def connect(self):
         config = self.config()
         config.require_credentials()
-        available = self.provider_factory(config).models()
+        client = self.provider_factory(config)
+        available = client.models()
         if config.model not in available:
             return {"connected": False, "models": available,
                     "message": "Endpoint reached, but this model ID was not listed. Choose a served model."}
         self.connected_endpoint = (config.base_url, config.model)
-        return {"connected": True, "models": available, "message": "Nemotron is connected."}
+        result = {"connected": True, "models": available, "message": "Nemotron is connected."}
+        balance = (client.balance() if config.base_url.rstrip("/") == SPARKLE_GATEWAY_URL
+                   and callable(getattr(client, "balance", None)) else None)
+        if balance is not None:
+            result["balance_tokens"] = balance.get("balance_tokens")
+            result["balance_name"] = balance.get("name")
+        return result
 
     def add_project(self, name="", path=""):
         if not isinstance(name, str) or not isinstance(path, str) or len(name) > 100 or len(path) > 2000:

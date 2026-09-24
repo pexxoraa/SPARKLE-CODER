@@ -6,6 +6,12 @@ from pathlib import Path
 import tomllib
 from urllib.parse import urlsplit
 
+# One source for the cloud preset, credential checks, balance and access link.
+# Set this to your gateway when one is available. It is separate from the UI.
+SPARKLE_GATEWAY_URL = os.environ.get("SPARKLE_GATEWAY_URL", "https://sparkle-coder-gateway.onrender.com/v1").rstrip("/")
+SPARKLE_GATEWAY_HOST = urlsplit(SPARKLE_GATEWAY_URL).hostname
+HOSTS_REQUIRING_A_KEY = ("integrate.api.nvidia.com", SPARKLE_GATEWAY_HOST)
+
 
 @dataclass
 class Config:
@@ -86,8 +92,8 @@ class Config:
             raise ValueError("extra_body cannot override model, messages, tools, or sampling limits.")
 
     def require_credentials(self) -> None:
-        if urlsplit(self.base_url).hostname == "integrate.api.nvidia.com" and not self.api_key:
-            raise ValueError("Add an NVIDIA API key in connection settings before using NVIDIA's hosted API.")
+        if urlsplit(self.base_url).hostname in HOSTS_REQUIRING_A_KEY and not self.api_key:
+            raise ValueError("Add an API key in connection settings before using a hosted API.")
 
     def public_info(self) -> dict:
         return {"base_url": self.base_url, "model": self.model,

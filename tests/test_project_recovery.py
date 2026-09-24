@@ -1,6 +1,7 @@
 """Missing registrations must not block startup or masquerade as recovered files."""
 
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -57,6 +58,47 @@ class ProjectRecoveryTests(unittest.TestCase):
         again = self.open_app()
         self.assertEqual(again.data["projects"], app.data["projects"])
         self.assertEqual(again.data["selected_project"], selected["id"])
+
+    def test_copied_app_uses_its_own_projects_and_keeps_original_files(self):
+        app = self.open_app()
+        project, workspace = app.project(app.data["selected_project"])
+        (workspace.root / "keep.txt").write_text("My saved code")
+        session = Session.create(workspace, "Keep my history", [], {})
+        copied = self.root / "moved-app"
+        shutil.copytree(self.application, copied)
+        with patch("sparkle_coder.webapp.application_root", return_value=copied):
+            restored = self.open_app()
+        new_workspace = restored.project(project["id"])[1]
+        self.assertEqual(new_workspace.root, copied / "PROJECTS" / "my-project")
+        self.assertEqual(new_workspace.read("keep.txt")[0], "My saved code")
+        self.assertEqual(Session.load(new_workspace, session.id).state["goal"], "Keep my history")
+        self.assertTrue(workspace.root.exists())
+        self.assertEqual(restored.projects_directory, copied / "PROJECTS")
+
+    def test_foreign_machine_path_never_gets_created_on_startup(self):
+        forbidden = self.root / "other-machine" / "SPARKLE" / "PROJECTS"
+        missing = {"id": "foreign", "name": "Keep registration", "path": str(forbidden / "lost")}
+        write_json(default_app_dir() / "settings.json", {"projects_path": str(forbidden), "projects": [missing]})
+        original_mkdir = Path.mkdir
+        def mkdir(path, *args, **kwargs):
+            if path == forbidden or forbidden in path.parents:
+                raise PermissionError("Other machine")
+            return original_mkdir(path, *args, **kwargs)
+        with patch.object(Path, "mkdir", mkdir):
+            app = self.open_app()
+        self.assertEqual(app.projects_directory, self.application / "PROJECTS")
+        self.assertEqual(next(p for p in app.data["projects"] if p["id"] == "foreign")["path"], missing["path"])
+        self.assertFalse(forbidden.exists())
+        self.assertNotEqual(app.data["selected_project"], "foreign")
+
+    def test_windows_paths_reconnect_when_copied_to_another_os(self):
+        target = self.application / "PROJECTS" / "existing"
+        target.mkdir(parents=True)
+        (target / "keep.txt").write_text("Actual saved work")
+        write_json(default_app_dir() / "settings.json", {"projects_path": r"C:\Users\Tester\SPARKLE\PROJECTS",
+                   "projects": [{"id": "crossos", "name": "Existing", "path": r"C:\Users\Tester\SPARKLE\PROJECTS\existing"}]})
+        app = self.open_app()
+        self.assertEqual(app.project("crossos")[1].root, target)
 
     def test_missing_entry_does_not_stop_other_projects_and_history_migrating(self):
         good = Workspace(self.legacy / "Projects" / "good")

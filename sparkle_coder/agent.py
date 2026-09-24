@@ -117,7 +117,10 @@ class Agent:
         else:
             system += "\nHost OS: " + platform.system() + ". Shell: " + ("cmd.exe" if os.name == "nt" else "/bin/sh")
             system += "\nProject folder: " + str(self.workspace.root)
-            system += "\nPython executable: " + sys.executable
+            from .python_runtime import python_argv, shell_command
+            python = python_argv(self.workspace.root)
+            system += "\nProject Python command: " + (shell_command(python) if python else
+                       "Not found. Explain the missing Python setup before proposing Python commands.")
         guidance = self.workspace.instructions()
         if guidance:
             system += "\n\nPROJECT GUIDANCE:\n" + guidance

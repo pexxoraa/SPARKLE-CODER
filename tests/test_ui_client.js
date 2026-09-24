@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const source = fs.readFileSync(path.join(__dirname, "../sparkle_coder/ui/app.js"), "utf8");
-const helper = source.slice(source.indexOf("async function api("), source.indexOf("function toast("));
+const helper = source.slice(source.indexOf("async function engineRequest("), source.indexOf("function toast("));
 
 async function check() {
   let response = {ok: true, data: {id: "saved-run", status: "needs_input", error: "Model disconnected"}};
@@ -13,7 +13,7 @@ async function check() {
     requests.push({url, options});
     return {ok: response.ok, json: async () => response.data};
   };
-  const api = new Function("fetch", "accessToken", helper + "\nreturn api;")(fetch, "test-launch-token");
+  const api = new Function("fetch", "accessToken", "engineOrigin", "isHosted", helper + "\nreturn api;")(fetch, "test-launch-token", "", false);
   assert.equal((await api("/runs/saved-run?after=1")).status, "needs_input");
   assert.equal((await api("/runs", {goal: "Build"})).error, "Model disconnected");
   assert.equal(requests[0].options.headers["X-Sparkle-Token"], "test-launch-token");

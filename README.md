@@ -4,9 +4,34 @@ A local browser app for your personal NVIDIA Nemotron coding agent.
 Chat with the agent, select projects, approve commands, inspect file changes,
 review checks, and resume saved tasks without using a terminal interface.
 
-Version **0.6.2**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
-Python **3.11+** is required once; there are no third-party runtime packages.
+Version **0.6.3**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
+Running from source requires Python **3.11+**; there are no third-party runtime packages.
 Launchers are included for Windows, macOS, and Linux.
+
+## Packaged-app repairs and hosted interface in 0.6.3
+
+- Packaged builds use an installed project Python interpreter for checks and
+  demos. The executable's bundled interpreter runs the app itself. Project
+  virtual environments take priority; missing Python gets a setup explanation.
+- Moving the app and its PROJECTS folder reconnects existing managed projects
+  without creating folders at the old computer's saved paths.
+- The native folder picker returns its result through a temporary file, so a
+  Windows app without console output can receive the selection.
+- Optional cloud balance requests have a three-second deadline with no retries.
+  NVIDIA and ordinary custom endpoints do not receive balance requests.
+- A single `SPARKLE_GATEWAY_URL` setting supplies the cloud preset and access
+  link. The separate gateway backend was not supplied and is not deployed here.
+- The light/dark redesign from the supplied update is retained.
+- **Connect website** pairs one hosted interface with the local engine. The
+  website runs on the same computer's browser; keep the local app running.
+  Reconnecting or restarting revokes the previous connection. Projects, command
+  execution and approval prompts continue to use the local engine.
+
+The Vercel build publishes only the interface assets. This is not an always-on
+cloud coding engine or phone remote access. See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+for publishing and connecting the website, and [TEST_REPORT.md](TEST_REPORT.md)
+for the validation limits. No live deployment is claimed until Vercel returns
+a successful deployment and a verified URL.
 
 ## Startup lock repair in 0.6.2
 

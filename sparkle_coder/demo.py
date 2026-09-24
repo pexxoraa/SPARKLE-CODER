@@ -2,21 +2,13 @@
 
 import json
 from pathlib import Path
-import os
-import shlex
-import subprocess
-import sys
 
 from .agent import Agent
 from .config import Config
 from .provider import Completion
 from .state import Session
 from .workspace import Workspace
-
-
-def python_command(*args):
-    parts = [sys.executable, *args]
-    return subprocess.list2cmdline(parts) if os.name == "nt" else shlex.join(parts)
+from .python_runtime import python_command
 
 
 def calls(*items):

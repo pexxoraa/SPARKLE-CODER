@@ -4,9 +4,7 @@ import json
 import os
 from pathlib import PurePosixPath
 import re
-import shlex
-import subprocess
-import sys
+from .python_runtime import python_argv, shell_command
 
 
 def package_manager(data, names, root="."):
@@ -38,9 +36,12 @@ def discover_checks(workspace, execution="local", *, files=None):
     def add(command, cwd, source):
         checks.append({"command": command, "cwd": cwd, "source": source})
 
-    python = "python3" if execution == "docker" else sys.executable
-    python = subprocess.list2cmdline([python]) if os.name == "nt" and execution != "docker" else shlex.quote(python)
     for root in sorted(roots, key=lambda item: (item != ".", item)):
+        argv = ["python3"] if execution == "docker" else python_argv(workspace.root / root)
+        # Keep a discoverable candidate when Python is absent. Setup inspection
+        # explains the missing interpreter; never substitute the frozen GUI.
+        argv = argv or (["py", "-3"] if os.name == "nt" else ["python3"])
+        python = shell_command(argv, docker=execution == "docker")
         prefix = "" if root == "." else root + "/"
         manifest = prefix + "package.json"
         if manifest in names:

@@ -51,6 +51,15 @@ def endpoint(responder):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_optional_balance_timeout_does_not_retry_or_use_model_timeout(self):
+        client = NemotronClient(Config(request_timeout=300))
+        with patch.object(client, "_read", side_effect=TimeoutError()) as request, \
+             patch.object(client, "wait_retry") as retry:
+            self.assertIsNone(client.balance())
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(request.call_args.kwargs["timeout"], 3)
+        retry.assert_not_called()
+
     def test_native_api_roundtrip_includes_real_repair_cycle(self):
         scripted = DemoProvider()
         def respond(body):
@@ -128,6 +137,45 @@ class ProviderTests(unittest.TestCase):
 
     def test_no_live_nvidia_key_gives_clear_setup_error(self):
         with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(ValueError, "Add an NVIDIA API key"):
+            with self.assertRaisesRegex(ValueError, "Add an API key"):
                 Config().require_credentials()
             Config(base_url="http://127.0.0.1:8000/v1").require_credentials()
+
+    def test_balance_is_none_when_endpoint_has_no_balance_route(self):
+        # A real NVIDIA or self-hosted server has no /balance route, and the
+        # shared test fixture answers every GET the same way /models does, so
+        # this doubles as a "unsupported endpoint" regression check.
+        with endpoint(lambda body: (200, {})) as (base_url, _):
+            config = Config(base_url=base_url)
+            config._runtime_api_key = "k"
+            self.assertIsNone(NemotronClient(config).balance())
+
+    def test_balance_is_parsed_from_a_sparkle_gateway(self):
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                payload = json.dumps({"balance_tokens": 42, "name": "Asha"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(payload)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            config = Config(base_url=f"http://127.0.0.1:{server.server_port}/v1")
+            config._runtime_api_key = "k"
+            self.assertEqual(NemotronClient(config).balance(), {"balance_tokens": 42, "name": "Asha"})
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_no_live_gateway_key_gives_clear_setup_error(self):
+        from sparkle_coder.config import SPARKLE_GATEWAY_HOST
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ValueError, "Add an API key"):
+                Config(base_url=f"https://{SPARKLE_GATEWAY_HOST}/v1").require_credentials()

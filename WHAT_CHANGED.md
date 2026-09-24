@@ -1,4 +1,22 @@
-# SPARKLE CODER 0.6.2 — recover abandoned locks and keep startup usable
+# SPARKLE CODER 0.6.3 — packaged-app fixes and a paired website interface
+
+- Retains the supplied light/dark redesign, cloud connection preset and packaging.
+- Finds project Python instead of running the packaged app as an interpreter.
+- Recovers moved managed-project paths while keeping unavailable entries.
+- Returns native folder selections without relying on console output.
+- Caps optional balance checks at three seconds and skips unsupported providers.
+- Uses one configured gateway URL for connection, balance and access links.
+- Adds a static Vercel build and an explicit local-app website connection.
+- Keeps model keys and device projects out of the website deployment.
+- Grants the release job the repository permission needed to attach artifacts.
+- Adds an executable smoke check covering approval, repair, history and download
+  through the paired HTTP boundary. See TEST_REPORT.md for results and limits.
+
+The separate Sparkle Cloud gateway is absent from the supplied files. Its
+authentication, billing, and live NVIDIA forwarding remain unverified. A hosted
+interface still requires a running local engine on the same computer.
+
+## SPARKLE CODER 0.6.2 — recover abandoned locks and keep startup usable
 
 The “Close the previous app and finish its active task” migration popup came from
 checking whether a lock file existed without checking whether its process still

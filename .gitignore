@@ -24,3 +24,5 @@ Thumbs.db
 APP_DATA/
 PROJECTS/*
 !PROJECTS/README.md
+web-dist/
+.vercel/

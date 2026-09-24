@@ -1,51 +1,11 @@
-"""Double-click entry point. Python 3.11+; no package installation is necessary."""
+"""Double-click entry point. Python 3.11+; no package installation is necessary.
 
-import contextlib
-from pathlib import Path
-import sys
-import webbrowser
-
-
-def show_error(message):
-    try:
-        import tkinter as tk
-        from tkinter import messagebox
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showerror("SPARKLE CODER", message)
-        root.destroy()
-    except Exception:
-        # The included guide is also usable on installations without Tk.
-        webbrowser.open((Path(__file__).resolve().parent / "OPEN_FIRST.html").as_uri())
-
-
-def launch():
-    if sys.version_info < (3, 11):
-        show_error("Install Python 3.11 or newer, then reopen SPARKLE CODER. "
-                   "The OPEN_FIRST.html file has setup instructions.")
-        return 1
-    from sparkle_coder.web import main
-    from sparkle_coder.webapp import default_app_dir
-    from sparkle_coder.workspace import Redactor
-    directory = default_app_dir()
-    try:
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        logfile = directory / "launcher.log"
-        if logfile.is_symlink():
-            raise ValueError("The launcher log must not be a symlink.")
-        # pythonw has no console; keep startup messages out of a terminal window.
-        with logfile.open("w", encoding="utf-8") as stream:
-            with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
-                return main()
-    except PermissionError:
-        show_error("SPARKLE CODER needs permission to save its projects beside the app.\n\n"
-                   "Move the whole SPARKLE-CODER folder to a writable location, such as Documents, then open it again. "
-                   "Keep the PROJECTS and APP_DATA folders with the app.")
-        return 1
-    except Exception as exc:
-        show_error("SPARKLE CODER could not start.\n\n" + Redactor().text(str(exc)))
-        return 1
-
+Kept intentionally thin: all the real logic lives in sparkle_coder/launcher.py
+so it's also importable from the packaged-executable entry point
+(packaging/bootstrap.py) — a .pyw file's extension is only meaningful to the
+OS's file association, not to Python's own `import` statement.
+"""
+from sparkle_coder.launcher import launch
 
 if __name__ == "__main__":
     raise SystemExit(launch())

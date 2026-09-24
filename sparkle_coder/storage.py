@@ -2,13 +2,49 @@
 
 from contextlib import ExitStack
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
 import tempfile
 import uuid
 
 from .workspace import write_json
 from .locking import LockError, workspace_lock
+
+
+def reconnect_portable_projects(data, projects_root):
+    """Rebase managed registrations after moving the app; never create old paths.
+
+    The storage pointer chooses another device folder. Within that folder (or
+    beside the app) PROJECTS has a fixed location, independent of saved absolute
+    paths. Existing external registrations and missing folders remain untouched.
+    """
+    previous = data.get("projects_path")
+    if not previous or previous == str(projects_root):
+        return False
+    path_type = PureWindowsPath if PureWindowsPath(previous).drive else PurePosixPath
+    old_root = path_type(previous)
+    reconnected = 0
+    for project in data.get("projects", []):
+        if project.get("migration_pending"):
+            continue
+        original = project["path"]
+        try:
+            relative = path_type(original).relative_to(old_root)
+        except ValueError:
+            continue
+        if not relative.parts or ".." in relative.parts:
+            continue
+        candidate = projects_root.joinpath(*relative.parts)
+        if not candidate.is_dir() or not candidate.resolve().is_relative_to(projects_root.resolve()):
+            continue
+        project["previous_paths"] = list(dict.fromkeys(project.get("previous_paths", []) + [original]))
+        project["path"] = str(candidate)
+        reconnected += 1
+    migration = data.setdefault("storage_migration", {})
+    migration["message"] = (f"The app folder changed. {reconnected} existing project(s) reconnected inside PROJECTS. "
+                            "Unavailable projects keep their previous paths. Use Find folder to reconnect them.")
+    data["projects_path"] = str(projects_root)
+    return True
 
 
 def _ignore_runtime_locks(directory, names):

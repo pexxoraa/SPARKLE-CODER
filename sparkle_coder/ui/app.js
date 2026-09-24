@@ -1,5 +1,11 @@
 "use strict";
 
+// The local engine supplies the gateway URL, including to the hosted UI.
+let sparkleGatewayUrl = "";
+function endpointHost(value) { try { return new URL(value).hostname; } catch (_) { return ""; } }
+function hostedNoKey(baseUrl) { const host=endpointHost(baseUrl); return host==="integrate.api.nvidia.com" || Boolean(host&&host===endpointHost(sparkleGatewayUrl)); }
+function cloudAccessUrl(baseUrl) { return new URL("/request", baseUrl).href; }
+
 const icons = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   chat: '<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/>',
@@ -20,6 +26,8 @@ const icons = {
   power: '<path d="M12 2v10M6.3 4.7a9 9 0 1 0 11.4 0"/>',
   undo: '<path d="m9 5-5 5 5 5M4 10h9a6 6 0 0 1 6 6v3"/>',
   bug: '<path d="M8 6 6 3M16 6l2-3M3 10h4M17 10h4M3 16h4M17 16h4"/><rect x="7" y="6" width="10" height="15" rx="5"/><path d="M7 12h10M12 12v9"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>',
 };
 function icon(name) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (icons[name] || icons.code) + '</svg>'; }
 function id(name) { return document.getElementById(name); }
@@ -27,7 +35,17 @@ function node(tag, className, text) { const e = document.createElement(tag); if 
 function fillIcons(root = document) { root.querySelectorAll("[data-icon]").forEach(e => e.innerHTML = icon(e.dataset.icon)); }
 
 id("app").innerHTML = `
-<div class="shell">
+<section id="engineWelcome" class="engine-welcome" hidden>
+  <img src="/favicon.svg" alt="" width="48" height="48"><p class="eyebrow">SPARKLE CODER · PERSONAL WORKSPACE</p>
+  <h1>Connect your computer.</h1><p>Your projects and coding engine stay on your device. This website gives you the same workspace in your browser.</p>
+  <ol><li>Open the updated SPARKLE CODER app on this computer.</li><li>In the local app, select <strong>Connect website</strong>.</li><li>Paste this website address and select <strong>Connect and open website</strong>.</li></ol>
+  <label for="websiteAddress">Your website address</label><div class="folder-input"><input id="websiteAddress" readonly><button id="copyWebsiteAddress" class="button secondary">Copy address</button></div>
+  <p class="settings-note">If your browser asks, allow this website to connect to your local network. Keep the local app running while you work. You can always use the local app directly.</p>
+  <p id="engineConnectionError" class="inline-result" role="status" hidden></p>
+  <div class="engine-actions"><button id="retryEngine" class="button primary">Retry connection</button><a class="button secondary" href="https://github.com/pexxoraa/SPARKLE-CODER/archive/refs/heads/main.zip" rel="noreferrer">Download the local app source</a></div>
+  <p class="settings-note">Source download: extract the ZIP and open OPEN_FIRST.html for your operating system's setup instructions.</p>
+</section>
+<div class="shell" id="workspaceShell">
   <button class="nav-backdrop" id="navBackdrop" aria-label="Close navigation"></button>
   <aside class="sidebar" id="sidebar">
     <div class="brand"><img src="/favicon.svg" alt="" width="32" height="32"><div>SPARKLE<span>CODER</span></div><span class="personal">Personal</span></div>
@@ -39,12 +57,13 @@ id("app").innerHTML = `
       <button id="briefButton" class="nav-item"><span data-icon="file"></span>Project brief</button>
       <button id="setupButton" class="nav-item"><span data-icon="check"></span>Check setup</button>
       <button id="storageButton" class="nav-item"><span data-icon="folder"></span>Device storage</button>
+      <button id="websiteButton" class="nav-item"><span data-icon="link"></span><span id="websiteButtonLabel">Connect website</span></button>
       <button data-view="history" class="nav-item"><span data-icon="history"></span>Run history</button>
     </nav>
     <div class="recent-heading">RECENT TASKS</div><div id="recentTasks" class="recent-tasks"><p class="muted">Your tasks will appear here.</p></div>
     <div class="sidebar-bottom">
       <button id="settingsButton" class="connection-card"><span class="connection-symbol" data-icon="bolt"></span><span class="connection-label"><strong id="connectionLabel">Connect Nemotron</strong><span id="connectionSub">Add your model connection</span></span><span data-icon="settings"></span></button>
-      <div class="local-label"><span data-icon="shield"></span>Engine on your device<button id="quitButton" aria-label="Quit application" title="Quit application"><span data-icon="power"></span></button></div>
+      <div class="local-label"><span data-icon="shield"></span>Engine on your device<div class="local-actions"><button id="themeToggle" type="button" class="theme-toggle" aria-label="Switch to light theme" title="Switch to light theme"><span data-icon="sun"></span></button><button id="quitButton" aria-label="Quit application" title="Quit application"><span data-icon="power"></span></button></div></div>
       <button id="experienceButton" class="text-button experience-button" aria-pressed="false">Switch to advanced view</button>
       <div class="app-version" id="appVersion">PERSONAL EDITION</div>
     </div>
@@ -130,12 +149,12 @@ id("app").innerHTML = `
 <dialog id="settingsDialog">
   <div class="dialog-header"><div><span class="eyebrow">YOUR ENGINE</span><h2>Connect Nemotron</h2></div><button class="icon-button" data-close="settingsDialog" aria-label="Close settings"><span data-icon="close"></span></button></div>
   <form id="settingsForm">
-    <p class="dialog-intro">Use NVIDIA's API or a Nemotron server running on your own hardware.</p>
-    <label for="connectionType">Connection</label><select id="connectionType"><option value="nvidia">NVIDIA API</option><option value="local">Local or custom server</option></select>
+    <p class="dialog-intro" id="connectionIntro">Use your Sparkle Cloud access key, your own NVIDIA API key, or a Nemotron server running on your own hardware.</p>
+    <label for="connectionType">Connection</label><select id="connectionType"><option value="nvidia">NVIDIA API (your own key)</option><option value="sparkle">Sparkle Cloud</option><option value="local">Local or custom server</option></select>
     <label for="baseUrl">API base URL</label><input id="baseUrl" type="url" required autocomplete="off">
     <label for="modelId">Model ID</label><input id="modelId" list="modelOptions" required autocomplete="off"><datalist id="modelOptions"><option value="nvidia/nemotron-3-super-120b-a12b"><option value="nvidia/nemotron-3-nano-30b-a3b"><option value="nvidia/nemotron-3-ultra-550b-a55b"></datalist>
-    <label for="apiKey">API key <span id="keyHint">Paste it here; it is never written to disk</span></label><div class="folder-input"><input id="apiKey" type="password" autocomplete="new-password" placeholder="Paste your NVIDIA key here"><button type="button" id="showApiKey" class="button secondary" aria-pressed="false">Show</button></div><button type="button" id="clearApiKey" class="text-button key-clear">Remove configured key</button>
-    <p class="settings-note">For NVIDIA-hosted models, paste the key from <a href="https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b" target="_blank" rel="noreferrer">build.nvidia.com</a> here. It stays in memory and is cleared when SPARKLE CODER quits. The CLI alternative is the <code>NVIDIA_API_KEY</code> environment variable.</p>
+    <label for="apiKey">API key <span id="keyHint">Paste it here; it is never written to disk</span></label><div class="folder-input"><input id="apiKey" type="password" autocomplete="new-password" placeholder="Paste your Sparkle access key here"><button type="button" id="showApiKey" class="button secondary" aria-pressed="false">Show</button></div><button type="button" id="clearApiKey" class="text-button key-clear">Remove configured key</button>
+    <p class="settings-note" id="connectionNote">Use the access key from your gateway operator. <a id="cloudAccessLink" target="_blank" rel="noreferrer">Open the gateway access page</a>. Your key stays in memory and is cleared when SPARKLE CODER quits.</p>
     <div class="settings-row"><div><label for="executionMode">Run commands in</label><select id="executionMode"><option value="local">This computer</option><option value="docker">Docker container</option></select></div><div><label for="toolFormat">Tool format</label><select id="toolFormat"><option value="native">Native tool calls</option><option value="json">JSON fallback</option></select></div></div>
     <button type="button" id="removeRunCaps" class="button secondary unlimited-button">Remove all run caps</button><p class="settings-note" id="capsHint">Model calls, run duration, total tokens and command duration can all be unlimited.</p>
     <details class="advanced"><summary>Run and connection settings</summary><div class="settings-row"><div><label for="maxSteps">Model calls <span>Blank = unlimited</span></label><input id="maxSteps" type="number" min="1" placeholder="Unlimited"></div><div><label for="maxSeconds">Elapsed seconds <span>Blank = unlimited</span></label><input id="maxSeconds" type="number" min="1" placeholder="Unlimited"></div></div><div class="settings-row"><div><label for="maxTotalTokens">Total tokens <span>Blank = unlimited</span></label><input id="maxTotalTokens" type="number" min="1" placeholder="Unlimited"></div><div><label for="commandTimeout">Command seconds <span>Blank = unlimited</span></label><input id="commandTimeout" type="number" min="1" placeholder="Unlimited"></div></div><div class="settings-row"><div><label for="maxTokens">Output tokens per call</label><input id="maxTokens" type="number" min="1"></div><div><label for="requestTimeout">API response timeout <span>Seconds before retry</span></label><input id="requestTimeout" type="number" min="1"></div></div></details>
@@ -173,25 +192,84 @@ id("app").innerHTML = `
   <p id="setupSummary" class="dialog-intro" role="status">Reading project settings…</p><div id="setupItems" class="setup-items"></div><details class="technical-details"><summary>Project map and available checks</summary><pre id="setupMap"></pre></details>
   <p class="settings-note">This scan does not run commands or install software. Finding a tool does not prove its version or the project works.</p>
   <div class="dialog-actions"><button id="setupConnection" class="button secondary">Connect Nemotron</button><button id="refreshSetup" class="button secondary">Check again</button><button id="investigateSetup" class="button primary">Help with setup</button></div></dialog>
+<dialog id="websiteDialog"><div class="dialog-header"><h2>Connect your website</h2><button class="icon-button" data-close="websiteDialog" aria-label="Close website connection"><span data-icon="close"></span></button></div>
+  <p class="dialog-intro" id="websiteConnectionIntro">Connect the SPARKLE CODER website you deployed. It will be able to read projects and request the same actions as this local app. Command approvals remain enabled.</p>
+  <form id="websiteForm"><label for="hostedWebsiteUrl">SPARKLE CODER website URL</label><input id="hostedWebsiteUrl" type="url" placeholder="https://your-project.vercel.app" required autocomplete="off"><div class="dialog-actions"><button id="pairWebsite" class="button primary">Connect and open website</button></div></form>
+  <p id="websiteResult" class="inline-result" role="status" hidden></p><a id="pairedWebsiteLink" class="button secondary" target="_blank" rel="noreferrer" hidden>Open connected website</a>
+  <div class="dialog-actions"><button id="disconnectWebsite" class="button secondary">Disconnect website</button></div>
+</dialog>
 <dialog id="quitDialog"><div class="dialog-header"><h2>Close SPARKLE CODER?</h2></div><p class="dialog-intro">The local engine will stop. Your projects and run history are saved. Use the desktop launcher to reopen it.</p><div class="dialog-actions"><button class="button secondary" data-close="quitDialog">Keep working</button><button id="confirmQuit" class="button danger">Quit app</button></div></dialog>
 `;
 fillIcons();
+
+const THEME_KEY = "sparkleTheme";
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const toggle = id("themeToggle");
+  if (!toggle) return;
+  const iconSpan = toggle.querySelector("[data-icon]");
+  if (iconSpan) { iconSpan.dataset.icon = theme === "light" ? "moon" : "sun"; fillIcons(toggle); }
+  const label = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
+}
+function preferredTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+  } catch (error) { /* storage unavailable (e.g. private browsing); fall back below */ }
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+applyTheme(preferredTheme());
+id("themeToggle").onclick = () => {
+  const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+  try { localStorage.setItem(THEME_KEY, next); } catch (error) { /* storage unavailable; theme still applies for this session */ }
+  applyTheme(next);
+};
 
 let appState = null, projectId = null, currentSession = null, currentRun = null;
 let files = [], historyItems = [], changes = [], runEvents = [], view = "build", tab = "activity";
 let fileData=null, transferBusy=false, cancelTransfer=false, lastConsoleKey="";
 let pollTimer = null, lastMessageKey = "", lastChangeKey = "", selectedFile = "", toastTimer = null;
 let briefRevision = null, briefProjectId = null, setupProjectId = null;
+function engineAddress(value) {
+  const url=new URL(value);
+  if(url.protocol!=="http:"||!["127.0.0.1","localhost"].includes(url.hostname)||!url.port||url.username||url.password||url.search||url.hash||!["","/"].includes(url.pathname))
+    throw new Error("The connection must point to SPARKLE CODER on this computer. Connect again from the local app.");
+  return url.origin;
+}
+const isHosted=!['127.0.0.1','localhost','[::1]'].includes(location.hostname);
+let engineOrigin="", accessToken="", connectionError="";
 const hash = new URLSearchParams(location.hash.slice(1));
-if (hash.get("token")) { sessionStorage.setItem("sparkleToken", hash.get("token")); window.history.replaceState(null, "", location.pathname); }
-const accessToken = sessionStorage.getItem("sparkleToken") || "";
+try {
+  if(isHosted) {
+    let saved={};
+    try { saved=JSON.parse(sessionStorage.getItem("sparkleConnection")||"{}"); } catch(_) {}
+    const engine=hash.get("engine")||saved.engine;
+    if(engine)engineOrigin=engineAddress(engine);
+    accessToken=hash.get("token")||saved.token||"";
+    if(typeof accessToken!=="string")accessToken="";
+    if(engineOrigin&&accessToken) { try {sessionStorage.setItem("sparkleConnection",JSON.stringify({engine:engineOrigin,token:accessToken}));}catch(_){} }
+  } else {
+    accessToken=hash.get("token")||"";
+    try { if(accessToken)sessionStorage.setItem("sparkleToken",accessToken); else accessToken=sessionStorage.getItem("sparkleToken")||""; }catch(_){}
+  }
+} catch(error) {connectionError=error.message;engineOrigin="";accessToken="";}
+if(hash.has("token")||hash.has("engine"))window.history.replaceState(null,"",location.pathname+location.search);
+
+async function engineRequest(path, body) {
+  if(!accessToken||(isHosted&&!engineOrigin))throw new Error("Open the local app and use Connect website to connect this browser.");
+  try {
+    return await fetch(engineOrigin+"/api"+path, {
+      method: body===undefined?"GET":"POST", credentials:"omit", redirect:"error",
+      headers:{"X-Sparkle-Token":accessToken,...(body===undefined?{}:{"Content-Type":"application/json"})},
+      ...(body===undefined?{}:{body:JSON.stringify(body)}),
+    });
+  } catch(_) { throw new Error("The local engine could not be reached. Keep SPARKLE CODER open on this computer and allow local-network access in your browser. Reconnect from the local app if it restarted."); }
+}
 
 async function api(path, body) {
-  const response = await fetch("/api" + path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "X-Sparkle-Token": accessToken, ...(body === undefined ? {} : {"Content-Type": "application/json"}) },
-    ...(body === undefined ? {} : {body: JSON.stringify(body)}),
-  });
+  const response = await engineRequest(path, body);
   const result = await response.json();
   const runState=/^\/runs(?:\/|$)/.test(path)&&typeof result.status==="string";
   if (!response.ok || (result.error&&!runState)) throw new Error(result.error || "The request failed.");
@@ -218,8 +296,9 @@ function renderProjects() {
   id("missingProjectsText").textContent=missing.length===1 ? "One saved project folder could not be found. You can keep working and reconnect it later." : missing.length+" saved project folders could not be found. You can keep working and reconnect them later.";
 }
 function renderProvider() {
+  sparkleGatewayUrl=appState.settings.cloud_gateway_url||"";
   const s=appState.settings; id("modelName").textContent=shortModel(s.model);
-  id("connectionLabel").textContent=s.connected ? "Nemotron connected" : s.key_configured || !s.base_url.includes("integrate.api.nvidia.com") ? "Model configured" : "Connect Nemotron";
+  id("connectionLabel").textContent=s.connected ? "Nemotron connected" : s.key_configured || !hostedNoKey(s.base_url) ? "Model configured" : "Connect Nemotron";
   id("connectionSub").textContent=s.connected ? shortModel(s.model) : "Connection settings";
   id("settingsButton").classList.toggle("connected",s.connected);
   id("appVersion").textContent="PERSONAL EDITION · "+appState.version;
@@ -431,7 +510,7 @@ async function pollRun() {
 async function startTask(event) {
   event.preventDefault(); if(busy()||transferBusy)return;
   const goal=id("goal").value.trim(); if(!goal&&!currentSession) { id("goal").focus(); return; }
-  if(appState.settings.base_url.includes("integrate.api.nvidia.com")&&!appState.settings.key_configured) { openSettings(); toast("Add your NVIDIA API key to start a live task."); return; }
+  if(hostedNoKey(appState.settings.base_url)&&!appState.settings.key_configured) { openSettings(); toast("Add your API key to start a live task."); return; }
   id("runButton").disabled=true;
   try {
     const result=await api("/runs",{project_id:projectId,goal,verify:id("verifyCommands").value.split("\n").map(x=>x.trim()).filter(Boolean),session_id:currentSession?.undone?null:currentSession?.id,review_edits:id("reviewEdits").checked,task_mode:id("taskMode").value});
@@ -452,7 +531,10 @@ function openSettings() {
   id("maxTotalTokens").value=s.max_total_tokens ?? ""; id("maxTokens").value=s.max_tokens;
   id("commandTimeout").value=s.command_timeout ?? "";id("requestTimeout").value=s.request_timeout;
   id("capsHint").textContent="Blank run caps mean unlimited. Changes apply to your next run or resumed task.";
-  id("connectionType").value=s.base_url.includes("integrate.api.nvidia.com")?"nvidia":"local"; id("connectionResult").hidden=true; id("settingsDialog").showModal();
+  id("connectionType").value=endpointHost(s.base_url)===endpointHost(sparkleGatewayUrl)&&sparkleGatewayUrl?"sparkle":endpointHost(s.base_url)==="integrate.api.nvidia.com"?"nvidia":"local";
+  if(sparkleGatewayUrl)id("cloudAccessLink").href=cloudAccessUrl(sparkleGatewayUrl);
+  id("connectionNote").hidden=id("connectionType").value!=="sparkle";
+  id("connectionResult").hidden=true; id("settingsDialog").showModal();
 }
 async function saveSettings(test=false) {
   const optionalNumber=(name)=>{const raw=id(name).value.trim(); if(!raw)return null; const value=Number(raw); return Number.isInteger(value)?value:raw;};
@@ -460,7 +542,15 @@ async function saveSettings(test=false) {
   id("saveSettings").disabled=true; id("testConnection").disabled=true;
   try {
     await api("/settings",body); id("apiKey").value=""; await refreshState(); id("clearApiKey").disabled=!appState.settings.key_configured; id("keyHint").textContent=appState.settings.key_configured?"Key ready for this connection":"No API key configured";
-    if(test) { id("connectionResult").hidden=false; id("connectionResult").textContent="Checking the model endpoint…"; const result=await api("/connect",{}); id("connectionResult").textContent=result.message; id("connectionResult").className="inline-result "+(result.connected?"success":""); if(result.models?.length) { id("modelOptions").replaceChildren(); result.models.filter(x=>x.toLowerCase().includes("nemotron")).forEach(x=>{const option=node("option");option.value=x;id("modelOptions").append(option);}); } await refreshState(); }
+    if(test) {
+      id("connectionResult").hidden=false; id("connectionResult").textContent="Checking the model endpoint…";
+      const result=await api("/connect",{});
+      let message=result.message;
+      if(typeof result.balance_tokens==="number") message+=` Balance: ${result.balance_tokens.toLocaleString()} tokens remaining.`;
+      id("connectionResult").textContent=message; id("connectionResult").className="inline-result "+(result.connected?"success":"");
+      if(result.models?.length) { id("modelOptions").replaceChildren(); result.models.filter(x=>x.toLowerCase().includes("nemotron")).forEach(x=>{const option=node("option");option.value=x;id("modelOptions").append(option);}); }
+      await refreshState();
+    }
     else { id("settingsDialog").close(); toast("Connection saved. Your key stays in this app process."); }
   } catch(error) { id("connectionResult").hidden=false; id("connectionResult").className="inline-result"; id("connectionResult").textContent=error.message; }
   finally { id("saveSettings").disabled=false; id("testConnection").disabled=false; }
@@ -525,7 +615,7 @@ async function copyText(text) {
   toast("Copied to clipboard.");
 }
 async function downloadBlob(path) {
-  const response=await fetch("/api"+path,{headers:{"X-Sparkle-Token":accessToken}});
+  const response=await engineRequest(path);
   if(!response.ok){let data;try{data=await response.json();}catch(_){data={};}throw new Error(data.error||"Download failed.");}
   return response.blob();
 }
@@ -729,7 +819,17 @@ id("allowCommand").onclick=()=>action(()=>answerApproval(true)); id("denyCommand
 id("toggleChecks").onclick=()=>{id("verificationFields").hidden=!id("verificationFields").hidden;if(!id("verificationFields").hidden)id("verifyCommands").focus();};
 id("settingsButton").onclick=openSettings; id("modelButton").onclick=openSettings;
 id("settingsForm").onsubmit=e=>{e.preventDefault();action(()=>saveSettings());}; id("testConnection").onclick=()=>action(()=>saveSettings(true));
-id("connectionType").onchange=()=>{if(id("connectionType").value==="nvidia"){id("baseUrl").value="https://integrate.api.nvidia.com/v1";id("modelId").value="nvidia/nemotron-3-super-120b-a12b";}else{id("baseUrl").value="http://127.0.0.1:8000/v1";id("modelId").value="";}id("apiKey").value="";id("apiKey").placeholder=id("connectionType").value==="nvidia"?"Paste your NVIDIA key here":"Optional for an unauthenticated local server";};
+id("connectionType").onchange=()=>{
+  const kind=id("connectionType").value;
+  const presets={
+    sparkle:{url:sparkleGatewayUrl,model:"nvidia/nemotron-3-super-120b-a12b",placeholder:"Paste your Sparkle access key here"},
+    nvidia:{url:"https://integrate.api.nvidia.com/v1",model:"nvidia/nemotron-3-super-120b-a12b",placeholder:"Paste your NVIDIA key here"},
+    local:{url:"http://127.0.0.1:8000/v1",model:"",placeholder:"Optional for an unauthenticated local server"},
+  };
+  const preset=presets[kind]||presets.local;
+  id("baseUrl").value=preset.url; id("modelId").value=preset.model; id("apiKey").value=""; id("apiKey").placeholder=preset.placeholder;
+  id("connectionNote").hidden=kind!=="sparkle";
+};
 id("executionMode").onchange=()=>id("executionNote").textContent=id("executionMode").value==="docker"?"Requires Docker and the supplied development image. Container networking is disabled by default.":"Local commands use your computer's permissions. You approve each agent-proposed command.";
 id("projectSelect").onchange=()=>action(()=>selectProject(id("projectSelect").value));
 id("addProject").onclick=()=>{id("projectForm").reset();id("projectError").hidden=true;id("projectDialog").showModal();};
@@ -742,7 +842,43 @@ id("menuButton").onclick=()=>document.body.classList.toggle("sidebar-open"); id(
 id("detailsButton").onclick=()=>document.body.classList.toggle("details-open"); id("closeDetails").onclick=()=>document.body.classList.remove("details-open");
 id("quitButton").onclick=()=>id("quitDialog").showModal();
 id("confirmQuit").onclick=()=>action(async()=>{await api("/quit",{});clearTimeout(pollTimer);id("quitDialog").close();id("app").replaceChildren(emptyPanel("Workspace closed","Your work is saved. Use the desktop launcher to open the app again."));});
-document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"&&!document.querySelector("dialog[open]")){e.preventDefault();id("taskForm").requestSubmit();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();action(newTask);}});
+document.addEventListener("keydown",e=>{if(!appState||id("workspaceShell").hidden)return;if((e.ctrlKey||e.metaKey)&&e.key==="Enter"&&!document.querySelector("dialog[open]")){e.preventDefault();id("taskForm").requestSubmit();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();action(newTask);}});
 document.querySelectorAll("dialog").forEach(dialog=>dialog.addEventListener("click",e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}}));
 
-(async()=>{try{await refreshState();await Promise.all([loadFiles(),loadHistory()]);renderSession(null);if(currentRun)schedulePoll(20);}catch(error){id("app").replaceChildren(emptyPanel("Open the app from its launcher",error.message));}})();
+function showEngineWelcome(message="") {
+  clearTimeout(pollTimer);id("workspaceShell").hidden=true;id("engineWelcome").hidden=false;
+  id("websiteAddress").value=location.origin;id("engineConnectionError").hidden=!message;id("engineConnectionError").textContent=message;
+  id("retryEngine").disabled=!accessToken||(isHosted&&!engineOrigin);
+}
+async function openWorkspace() {
+  if(isHosted&&(!engineOrigin||!accessToken)){showEngineWelcome(connectionError);return;}
+  try {await refreshState();await Promise.all([loadFiles(),loadHistory()]);renderSession(null);id("engineWelcome").hidden=true;id("workspaceShell").hidden=false;if(currentRun)schedulePoll(20);}
+  catch(error){showEngineWelcome(error.message);}
+}
+id("websiteButtonLabel").textContent=isHosted?"Website connection":"Connect website";
+id("websiteButton").onclick=()=>{
+  id("websiteForm").hidden=isHosted;id("websiteResult").hidden=true;id("pairedWebsiteLink").hidden=true;
+  id("hostedWebsiteUrl").value=appState.hosted_ui?.origin||"";
+  id("websiteConnectionIntro").textContent=isHosted?"Connected to the SPARKLE CODER engine on this computer. Disconnecting keeps your saved projects and the local app available.":"Connect the SPARKLE CODER website you deployed. It will be able to read projects and request the same actions as this local app. Command approvals remain enabled.";
+  id("disconnectWebsite").disabled=!appState.hosted_ui?.origin;id("websiteDialog").showModal();
+};
+id("websiteForm").onsubmit=event=>{
+  event.preventDefault();action(async()=>{
+    id("pairWebsite").disabled=true;id("websiteResult").hidden=true;id("pairedWebsiteLink").hidden=true;
+    try {
+      const result=await api("/hosted-ui",{url:id("hostedWebsiteUrl").value.trim()});
+      id("pairedWebsiteLink").href=result.url;id("pairedWebsiteLink").hidden=false;
+      id("websiteResult").textContent="Website connected. If a new tab did not open, use Open connected website below. Keep this private connection link to yourself.";id("websiteResult").hidden=false;
+      window.open(result.url,"_blank","noopener,noreferrer");await refreshState();id("disconnectWebsite").disabled=false;
+    } catch(error){id("websiteResult").textContent=error.message;id("websiteResult").hidden=false;}
+    finally{id("pairWebsite").disabled=false;}
+  });
+};
+id("disconnectWebsite").onclick=()=>action(async()=>{
+  await api("/disconnect-hosted-ui",{});id("websiteDialog").close();
+  if(isHosted){try{sessionStorage.removeItem("sparkleConnection");}catch(_){}accessToken="";engineOrigin="";showEngineWelcome("Website disconnected. Your projects remain on your computer.");}
+  else {await refreshState();toast("Website disconnected.");}
+});
+id("copyWebsiteAddress").onclick=()=>action(()=>copyText(location.origin));
+id("retryEngine").onclick=()=>action(openWorkspace);
+openWorkspace();

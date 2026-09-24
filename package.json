@@ -1,0 +1,10 @@
+{
+  "name": "sparkle-coder-web",
+  "version": "0.6.3",
+  "private": true,
+  "description": "Hosted interface for the SPARKLE CODER local coding engine",
+  "scripts": {
+    "build": "node scripts/build-web.mjs",
+    "test": "node tests/test_ui_client.js && node tests/test_ui_explanations.js && node tests/test_ui_project_recovery.js && node tests/test_ui_hosted.js"
+  }
+}
