@@ -1,37 +1,27 @@
-# SPARKLE CODER — personal edition
+# SPARKLE CODER
 
-A local browser app for your personal NVIDIA Nemotron coding agent.
-Chat with the agent, select projects, approve commands, inspect file changes,
-review checks, and resume saved tasks without using a terminal interface.
+A local coding workspace with a managed tester edition and a personal edition.
+Version **0.7.0** adds account signup, manual UPI approval, protected token
+balances, a shared NVIDIA gateway, a simpler interface and efficient prompts.
 
-Version **0.6.3**. Open **OPEN_FIRST.html** or read [START_HERE.md](START_HERE.md).
-Running from source requires Python **3.11+**; there are no third-party runtime packages.
-Launchers are included for Windows, macOS, and Linux.
+**Tester rollout starts with [PILOT_SETUP.md](PILOT_SETUP.md).** The owner deploys
+Cloudflare Workers + D1 and configures the server origin in the installer.
+Testers enter their details, submit a ₹15 UPI reference and receive 1,000,000
+input/output tokens after admin approval. They do not enter model API keys.
 
-## Packaged-app repairs and hosted interface in 0.6.3
+Windows Setup includes Python, creates shortcuts and preserves user projects.
+The build workflow verifies installation and updates on Windows. Fast mode uses
+4,096 output tokens per request, compacted history and reasoning disabled by
+default. Existing explicit run limits are preserved. Command approvals remain on.
 
-- Packaged builds use an installed project Python interpreter for checks and
-  demos. The executable's bundled interpreter runs the app itself. Project
-  virtual environments take priority; missing Python gets a setup explanation.
-- Moving the app and its PROJECTS folder reconnects existing managed projects
-  without creating folders at the old computer's saved paths.
-- The native folder picker returns its result through a temporary file, so a
-  Windows app without console output can receive the selection.
-- Optional cloud balance requests have a three-second deadline with no retries.
-  NVIDIA and ordinary custom endpoints do not receive balance requests.
-- A single `SPARKLE_GATEWAY_URL` setting supplies the cloud preset and access
-  link. The separate gateway backend was not supplied and is not deployed here.
-- The light/dark redesign from the supplied update is retained.
-- **Connect website** pairs one hosted interface with the local engine. The
-  website runs on the same computer's browser; keep the local app running.
-  Reconnecting or restarting revokes the previous connection. Projects, command
-  execution and approval prompts continue to use the local engine.
+The gateway code and installer pipeline are implemented. Live hosting, real
+payments and model performance require owner configuration and a live pilot.
+See [TEST_REPORT.md](TEST_REPORT.md) for verified results and remaining limits.
+The previous Vercel static interface is optional; it is not the shared credit
+server. Use the Cloudflare pilot guide for this release.
 
-The Vercel build publishes only the interface assets. This is not an always-on
-cloud coding engine or phone remote access. See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-for publishing and connecting the website, and [TEST_REPORT.md](TEST_REPORT.md)
-for the validation limits. No live deployment is claimed until Vercel returns
-a successful deployment and a verified URL.
+Personal/source setup: open **OPEN_FIRST.html** or [START_HERE.md](START_HERE.md).
+Source runs need Python 3.11+ and no third-party Python runtime packages.
 
 ## Startup lock repair in 0.6.2
 
@@ -299,10 +289,9 @@ commands, scripted model HTTP interactions, browser API authentication,
 settings, approvals, cancellation, history, and undo. Scripted tests do not
 establish live Nemotron generation quality.
 
-Visual browser testing was unavailable in the supplied environment. Windows
-and macOS launchers are included but were not executed on those operating
-systems. This is a source app with desktop launchers, not a signed standalone
-installer or a mobile app.
+Visual browser testing and live model generation remain separate gates. Check
+the Actions run before distributing Windows/macOS artifacts. The builds are
+unsigned, and this is a desktop app rather than a mobile app.
 
 For contributors, run `python3 -m unittest discover -s tests -v`,
 `node tests/test_ui_client.js`, `node tests/test_ui_explanations.js`, and

@@ -85,8 +85,8 @@ id("app").innerHTML = `
           <div class="supervision-strip" id="supervisionStrip" hidden><span class="pulse-dot"></span><span id="currentAction">Ready</span><span id="elapsedTime">0s</span><button id="showMonitor" class="text-button">Details ↗</button></div><div class="conversation" id="conversation">
             <div id="welcome" class="welcome">
               <div class="workspace-label"><span></span>YOUR PERSONAL CODING AGENT</div>
-              <h1>What are we building?</h1>
-              <p>Describe the result. Watch the work.<br>Review every change.</p>
+              <h1>What do you want to build?</h1>
+              <p>Describe your idea. Start small, then refine.</p>
               <div class="suggestions">
                 <button class="suggestion" data-prompt="Build a simple to-do list that works offline. Let me add, complete, and delete tasks, and keep them after refreshing. Use a simple web page. Test the behavior and give me easy steps to open and use it. I do not have programming experience."><span data-icon="code"></span><strong>Start with a to-do list</strong><span>A small first project with clear checks</span></button>
                 <button class="suggestion" data-prompt="Inspect this project, identify a concrete bug, reproduce it with a test, and fix it without changing unrelated behavior."><span data-icon="bug"></span><strong>Fix a bug</strong><span>Find the cause and verify a fix</span></button>
@@ -105,11 +105,11 @@ id("app").innerHTML = `
             <div class="approval-actions"><button id="denyCommand" class="button secondary">Deny</button><button id="allowCommand" class="button primary">Allow once</button></div>
           </div>
           <form id="taskForm" class="composer">
-            <div class="task-mode-row"><label for="taskMode">Mode</label><select id="taskMode"><option value="build">Build · edit and verify</option><option value="ask">Ask · inspect and explain</option></select><span id="runBudgetLabel">Unlimited run</span></div>
+            <div class="task-mode-row"><label for="taskMode">Mode</label><select id="taskMode"><option value="build">Build</option><option value="ask">Ask</option></select><label for="efficiencyMode">Effort</label><select id="efficiencyMode"><option value="efficient">Fast</option><option value="thorough">Thorough</option></select><span id="runBudgetLabel">Unlimited run</span></div>
             <label class="sr-only" for="goal">Task for Nemotron</label>
             <textarea id="goal" rows="3" maxlength="12000" placeholder="Describe what you want to build or change…"></textarea>
             <div id="verificationFields" class="verification-fields" hidden><label for="verifyCommands">Required checks <span>One command per line</span></label><textarea id="verifyCommands" rows="2" placeholder="For example: python3 -m unittest discover -s tests -v"></textarea><p>These checks run automatically when the agent proposes completion.</p></div>
-            <div class="supervision-choice"><label><input type="checkbox" id="reviewEdits" checked> Review each file edit</label><span>Command approvals remain on</span></div><div class="composer-toolbar"><button type="button" id="modelButton" class="model-button"><span data-icon="bolt"></span><span id="modelName">Nemotron Super</span><span class="chevron">⌄</span></button><button type="button" id="toggleChecks" class="text-button"><span data-icon="check"></span><span>Checks</span></button><span class="composer-spacer"></span><button type="button" id="pauseButton" class="button secondary" hidden>Pause</button><button type="button" id="stopButton" class="button danger" hidden><span data-icon="stop"></span>Stop</button><button type="submit" id="runButton" class="button primary">Run agent<span data-icon="arrow"></span></button></div>
+            <div class="supervision-choice"><label><input type="checkbox" id="reviewEdits"> Review each file edit</label><span>Command approvals remain on</span></div><div class="composer-toolbar"><button type="button" id="modelButton" class="model-button"><span data-icon="bolt"></span><span id="modelName">Nemotron Super</span><span class="chevron">⌄</span></button><button type="button" id="toggleChecks" class="text-button"><span data-icon="check"></span><span>Checks</span></button><span class="composer-spacer"></span><button type="button" id="pauseButton" class="button secondary" hidden>Pause</button><button type="button" id="stopButton" class="button danger" hidden><span data-icon="stop"></span>Stop</button><button type="submit" id="runButton" class="button primary">Run agent<span data-icon="arrow"></span></button></div>
           </form>
           <div class="composer-note"><span id="taskNote">Files stay in your project. Commands need your approval.</span><span class="keyboard-hint">Ctrl / ⌘ + Enter</span></div>
         </div>
@@ -146,6 +146,18 @@ id("app").innerHTML = `
     </div>
   </main>
 </div>
+<dialog id="accountDialog">
+  <div class="dialog-header"><h2>Your account</h2><button class="icon-button" data-close="accountDialog" aria-label="Close account"><span data-icon="close"></span></button></div>
+  <p id="accountMessage" role="status">Loading account…</p>
+  <div class="account-balance" id="accountBalance" hidden><strong id="creditAmount">0</strong><span>tokens available</span><p id="creditHeld"></p></div>
+  <form id="accountForm"><div class="settings-row"><div><label for="memberName">Full name</label><input id="memberName" autocomplete="name" required minlength="2" maxlength="80"></div><div><label for="memberPhone">Phone <span>Optional</span></label><input id="memberPhone" type="tel" autocomplete="tel" maxlength="32"></div></div><label for="memberEmail">Email</label><input id="memberEmail" type="email" autocomplete="email" required maxlength="200">
+    <label class="check-label"><input id="memberConsent" type="checkbox" required> I agree to send selected project code and prompts to the shared server and NVIDIA to process my requests. My details and payment reference are shared with the admin.</label>
+    <label class="check-label"><input id="memberRecovery" type="checkbox"> Reconnect an existing account on this computer (admin review required).</label>
+    <div class="dialog-actions"><button id="enrollAccount" class="button primary">Request access</button></div></form>
+  <section id="paymentSection" hidden><h3>Add 1,000,000 tokens · ₹15</h3><p>Pay ₹15 using GPay, PhonePe or Paytm. Check the recipient before paying.</p><label for="payUpiId">UPI ID</label><div class="folder-input"><input id="payUpiId" readonly><button type="button" id="copyUpi" class="button secondary">Copy</button></div><p id="payeeName"></p><p>After paying, enter the transaction reference below. Credits appear after the admin checks and accepts your payment.</p>
+    <form id="paymentForm"><label for="paymentReference">UPI transaction reference / UTR</label><input id="paymentReference" required minlength="8" maxlength="40" autocomplete="off"><div class="dialog-actions"><button id="submitPayment" class="button primary">Submit payment for review</button></div></form></section>
+  <div id="accountPayments"></div><p class="settings-note">Input and output tokens both count. A temporary reservation is released when a request finishes. Your connection is remembered on this computer.</p><p id="accountSupport" class="settings-note"></p><div class="dialog-actions"><button id="reconnectAccount" class="text-button">Reconnect account</button><button id="refreshAccount" class="button secondary">Refresh account</button></div>
+</dialog>
 <dialog id="settingsDialog">
   <div class="dialog-header"><div><span class="eyebrow">YOUR ENGINE</span><h2>Connect Nemotron</h2></div><button class="icon-button" data-close="settingsDialog" aria-label="Close settings"><span data-icon="close"></span></button></div>
   <form id="settingsForm">
@@ -228,6 +240,7 @@ id("themeToggle").onclick = () => {
 };
 
 let appState = null, projectId = null, currentSession = null, currentRun = null;
+let accountTimer = null;
 let files = [], historyItems = [], changes = [], runEvents = [], view = "build", tab = "activity";
 let fileData=null, transferBusy=false, cancelTransfer=false, lastConsoleKey="";
 let pollTimer = null, lastMessageKey = "", lastChangeKey = "", selectedFile = "", toastTimer = null;
@@ -303,10 +316,44 @@ function renderProvider() {
   id("settingsButton").classList.toggle("connected",s.connected);
   id("appVersion").textContent="PERSONAL EDITION · "+appState.version;
   id("runBudgetLabel").textContent=[s.max_steps,s.max_seconds,s.max_total_tokens,s.command_timeout].some(v=>v!=null)?"Custom run caps":"Unlimited run";
+  id('efficiencyMode').value=s.efficiency||'efficient';
+  renderAccount();
+}
+function renderAccount() {
+  const a=appState?.account||{};
+  document.body.classList.toggle('pilot-mode',!!a.enabled);
+  if(!a.enabled)return;
+  id('connectionLabel').textContent='Account';
+  id('connectionSub').textContent=a.ready?Number(a.available_tokens||0).toLocaleString()+' tokens':a.enrolled?'Waiting for approval':'Request access';
+  id('modelName').textContent=a.ready?Number(a.available_tokens||0).toLocaleString()+' tokens':'Account';
+  id('appVersion').textContent='TESTER EDITION · '+appState.version;
+  id('accountForm').hidden=!!a.enrolled;
+  id('accountBalance').hidden=!a.ready;
+  id('creditAmount').textContent=Number(a.available_tokens||0).toLocaleString();
+  id('creditHeld').textContent=a.held_tokens?Number(a.held_tokens).toLocaleString()+' tokens temporarily reserved':'';
+  id('accountMessage').textContent=a.ready?'Connected as '+a.name:a.enrolled?(a.status==='suspended'?'Account suspended. Contact the admin.':'Request received. Payment or device approval is pending.'):'Enter your details to request access.';
+  const pending=(a.payments||[]).some(p=>p.status==='pending');
+  id('paymentSection').hidden=!a.enrolled||!a.upi_id||!a.payee_name||pending||a.status==='suspended'||a.kind==='recovery'&&!a.ready;
+  id('payUpiId').value=a.upi_id||'';id('payeeName').textContent='Recipient: '+(a.payee_name||'Not configured');
+  if(a.enrolled&&(!a.upi_id||!a.payee_name))id('accountMessage').textContent+=' The admin has not enabled payments yet. Do not send payment.';
+  id('accountSupport').textContent=a.support_email?'Support: '+a.support_email:'';
+  id('accountPayments').replaceChildren(...(a.payments||[]).map(p=>node('p','payment-record','₹15 · '+p.utr+' · '+p.status+(p.note?' — '+p.note:''))));
+}
+async function refreshAccount() {
+  clearTimeout(accountTimer);
+  if(!appState?.account?.enabled)return;
+  try {appState.account=await api('/account');renderAccount();}
+  catch(error){id('accountMessage').textContent=error.message;throw error;}
+  finally {accountTimer=setTimeout(()=>{if(!document.hidden)refreshAccount().catch(()=>{});else accountTimer=setTimeout(()=>refreshAccount().catch(()=>{}),60000);},60000);}
+}
+async function openAccount() {
+  renderAccount();id('accountDialog').showModal();
+  try {await refreshAccount();}catch(_){}
 }
 function renderControls() {
   const working=busy(); id("runButton").disabled=!!working || transferBusy; id("runButton").firstChild.textContent=working ? "Working " : currentSession ? "Continue " : "Run agent";
   id("taskMode").disabled=!!working;
+  id('efficiencyMode').disabled=!!working;
   id("saveBrief").disabled=!!working;
   id("investigateSetup").disabled=!!working;
   id("reviewEdits").disabled=!!working||id("taskMode").value==="ask";
@@ -504,12 +551,13 @@ async function pollRun() {
     const changeKey=(result.session?.changed_files||[]).join()+":"+(result.session?.actions?.length||0);
     if(tab==="changes"&&changeKey!==lastChangeKey) { lastChangeKey=changeKey; await loadChanges(); }
     if(busy())schedulePoll();
-    else { await Promise.all([loadFiles(),loadHistory()]); renderControls(); }
+    else { await Promise.all([loadFiles(),loadHistory()]); renderControls(); if(appState.account?.enabled)await refreshAccount(); }
   } catch(error) { toast(error.message); id("monitorHeartbeat").textContent="Connection lost. Retrying; the engine may still be working."; if(busy())schedulePoll(2000); }
 }
 async function startTask(event) {
   event.preventDefault(); if(busy()||transferBusy)return;
   const goal=id("goal").value.trim(); if(!goal&&!currentSession) { id("goal").focus(); return; }
+  if(appState.account?.enabled&&!appState.account.ready){await openAccount();return;}
   if(hostedNoKey(appState.settings.base_url)&&!appState.settings.key_configured) { openSettings(); toast("Add your API key to start a live task."); return; }
   id("runButton").disabled=true;
   try {
@@ -521,6 +569,7 @@ async function startDemo() { if(busy())return; id("demoButton").disabled=true; t
 async function answerApproval(allow) { if(!currentRun?.approval)return; id("allowCommand").disabled=true; id("denyCommand").disabled=true; try { await api("/runs/"+currentRun.id+"/approval",{approval_id:currentRun.approval.id,allow}); currentRun.approval=null; renderControls(); schedulePoll(10); } finally { id("allowCommand").disabled=false; id("denyCommand").disabled=false; } }
 
 function openSettings() {
+  if(appState?.account?.enabled){openAccount();return;}
   const s=appState.settings; id("baseUrl").value=s.base_url; id("modelId").value=s.model; id("apiKey").value="";
   id("apiKey").placeholder=s.key_configured?"Key is set. Leave blank to keep it.":"Paste your key here";
   id("apiKey").type="password";id("showApiKey").textContent="Show";id("showApiKey").setAttribute("aria-pressed","false");
@@ -808,6 +857,12 @@ id("setupConnection").onclick=()=>{id("setupDialog").close();openSettings();};
 id("investigateSetup").onclick=()=>{if(busy())return;id("setupDialog").close();followup("Inspect this project's setup. Identify missing tools or dependencies, explain what is needed in simple words, and ask before running installation commands. Verify the setup with real checks where possible.","build");};
 id("experienceButton").onclick=()=>action(async()=>{await api("/experience",{experience:appState.experience==="advanced"?"simple":"advanced"});await refreshState();});
 id("taskMode").onchange=renderControls;
+id('efficiencyMode').onchange=()=>action(async()=>{await api('/settings',{efficiency:id('efficiencyMode').value});await refreshState();});
+id('refreshAccount').onclick=()=>action(refreshAccount);
+id('reconnectAccount').onclick=()=>action(async()=>{if(!window.confirm('This device will need admin approval again. Your existing credits and projects are kept. Reconnect?'))return;appState.account=await api('/account/reconnect',{confirm:true});id('memberRecovery').checked=true;renderAccount();});
+id('copyUpi').onclick=()=>action(()=>copyText(id('payUpiId').value));
+id('accountForm').onsubmit=e=>{e.preventDefault();action(async()=>{id('enrollAccount').disabled=true;try{appState.account=await api('/account/enroll',{name:id('memberName').value.trim(),email:id('memberEmail').value.trim(),phone:id('memberPhone').value.trim(),consent:id('memberConsent').checked,recovery:id('memberRecovery').checked});renderAccount();await refreshState();}catch(error){id('accountMessage').textContent=error.message;}finally{id('enrollAccount').disabled=false;}});};
+id('paymentForm').onsubmit=e=>{e.preventDefault();action(async()=>{id('submitPayment').disabled=true;try{appState.account=await api('/account/payment',{utr:id('paymentReference').value.trim()});id('paymentReference').value='';renderAccount();}catch(error){id('accountMessage').textContent=error.message;}finally{id('submitPayment').disabled=false;}});};
 id("showApiKey").onclick=()=>{const show=id("apiKey").type==="password";id("apiKey").type=show?"text":"password";id("showApiKey").textContent=show?"Hide":"Show";id("showApiKey").setAttribute("aria-pressed",String(show));};
 id("clearApiKey").onclick=()=>action(async()=>{await api("/settings",{base_url:id("baseUrl").value.trim(),clear_key:true});await refreshState();id("apiKey").value="";id("keyHint").textContent="Key removed for this app session";id("clearApiKey").disabled=true;});
 id("removeRunCaps").onclick=()=>{["maxSteps","maxSeconds","maxTotalTokens","commandTimeout"].forEach(name=>id(name).value="");id("capsHint").textContent="All run caps cleared. Click Save connection to apply.";};
@@ -852,7 +907,7 @@ function showEngineWelcome(message="") {
 }
 async function openWorkspace() {
   if(isHosted&&(!engineOrigin||!accessToken)){showEngineWelcome(connectionError);return;}
-  try {await refreshState();await Promise.all([loadFiles(),loadHistory()]);renderSession(null);id("engineWelcome").hidden=true;id("workspaceShell").hidden=false;if(currentRun)schedulePoll(20);}
+  try {await refreshState();await Promise.all([loadFiles(),loadHistory()]);renderSession(null);id("engineWelcome").hidden=true;id("workspaceShell").hidden=false;if(currentRun)schedulePoll(20);if(appState.account?.enabled){if(!appState.account.enrolled)openAccount();else refreshAccount().catch(()=>{});}}
   catch(error){showEngineWelcome(error.message);}
 }
 id("websiteButtonLabel").textContent=isHosted?"Website connection":"Connect website";

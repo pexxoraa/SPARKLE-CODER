@@ -328,7 +328,7 @@ class LauncherTests(unittest.TestCase):
                     connection.request("GET", "/api/state", headers={"X-Sparkle-Token": info["token"]})
                     response = connection.getresponse()
                     self.assertEqual(response.status, 200)
-                    self.assertEqual(json.loads(response.read())["version"], "0.6.3")
+                    self.assertEqual(json.loads(response.read())["version"], "0.7.0")
                     connection.request("POST", "/api/quit", body="{}", headers={
                         "X-Sparkle-Token": info["token"], "Content-Type": "application/json"})
                     response = connection.getresponse()

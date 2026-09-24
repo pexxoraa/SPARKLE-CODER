@@ -78,6 +78,11 @@ test_stale_lock_migrates_with_history_and_no_copied_runtime_locks (test_lock_rec
 test_storage_relocation_recovers_stale_locks_and_does_not_copy_them (test_lock_recovery.MigrationLockTests.test_storage_relocation_recovers_stale_locks_and_does_not_copy_them) ... ok
 test_uncertain_lock_and_linked_history_stay_deferred_without_stopping_app (test_lock_recovery.MigrationLockTests.test_uncertain_lock_and_linked_history_stay_deferred_without_stopping_app) ... ok
 test_retry_route_is_authenticated_and_does_not_move_during_an_active_task (test_lock_recovery.MigrationRetryWebTests.test_retry_route_is_authenticated_and_does_not_move_during_an_active_task) ... ok
+test_signup_approval_model_usage_restart_and_credit_reload (test_pilot.DesktopGatewayTests.test_signup_approval_model_usage_restart_and_credit_reload) ... ok
+test_direct_provider_does_not_repeat_an_ambiguous_post (test_pilot.EfficiencyTests.test_direct_provider_does_not_repeat_an_ambiguous_post) ... ok
+test_gateway_retry_reuses_request_id_and_fast_mode_disables_reasoning (test_pilot.EfficiencyTests.test_gateway_retry_reuses_request_id_and_fast_mode_disables_reasoning) ... ok
+test_historical_file_writes_shrink_without_losing_original_or_pairing (test_pilot.EfficiencyTests.test_historical_file_writes_shrink_without_losing_original_or_pairing) ... ok
+test_plain_site_verification_rechecks_edits_without_commands (test_pilot.EfficiencyTests.test_plain_site_verification_rechecks_edits_without_commands) ... ok
 test_a_migrated_check_cannot_accidentally_test_the_backup_folder (test_plain_experience.PlainRecoveryTests.test_a_migrated_check_cannot_accidentally_test_the_backup_folder) ... ok
 test_corrected_assumption_supersedes_both_failed_variants_and_completes (test_plain_experience.PlainRecoveryTests.test_corrected_assumption_supersedes_both_failed_variants_and_completes) ... ok
 test_delivery_uses_recorded_checks_and_becomes_stale_after_edits (test_plain_experience.PlainRecoveryTests.test_delivery_uses_recorded_checks_and_becomes_stale_after_edits) ... ok
@@ -174,6 +179,6 @@ test_undo_checks_all_conflicts_before_writing (test_workspace.WorkspaceTests.tes
 test_undo_restores_original_and_removes_new_file (test_workspace.WorkspaceTests.test_undo_restores_original_and_removes_new_file) ... ok
 
 ----------------------------------------------------------------------
-Ran 174 tests in 16.121s
+Ran 179 tests in 26.900s
 
 OK

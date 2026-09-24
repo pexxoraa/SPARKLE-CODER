@@ -22,8 +22,10 @@ class Config:
     tool_format: str = "native"
     temperature: float = 1.0
     top_p: float = 0.95
-    max_tokens: int = 16000
-    context_chars: int = 120000
+    max_tokens: int = 4096
+    context_chars: int = 24000
+    efficiency: str = "efficient"
+    _runtime_cloud: bool = field(default=False, init=False, repr=False)
     # Run caps are optional. None means unlimited; Stop remains available in the UI.
     max_steps: int | None = None
     max_seconds: int | None = None
@@ -63,6 +65,8 @@ class Config:
             raise ValueError("Remote endpoints require HTTPS; local loopback HTTP is allowed.")
         if self.tool_format not in ("native", "json"):
             raise ValueError("tool_format must be native or json.")
+        if self.efficiency not in ("efficient", "thorough"):
+            raise ValueError("efficiency must be efficient or thorough.")
         if self.execution not in ("local", "docker"):
             raise ValueError("execution must be local or docker.")
         if type(self.max_tokens) is not int or self.max_tokens <= 0:
@@ -92,6 +96,8 @@ class Config:
             raise ValueError("extra_body cannot override model, messages, tools, or sampling limits.")
 
     def require_credentials(self) -> None:
+        if self._runtime_cloud and not self.api_key:
+            raise ValueError('Open Account, enter your details and request access first.')
         if urlsplit(self.base_url).hostname in HOSTS_REQUIRING_A_KEY and not self.api_key:
             raise ValueError("Add an API key in connection settings before using a hosted API.")
 
@@ -132,8 +138,9 @@ tool_format = "native"
 # NVIDIA recommends these sampling settings for Nemotron 3 Super.
 temperature = 1.0
 top_p = 0.95
-max_tokens = 16000
-context_chars = 120000
+max_tokens = 4096
+context_chars = 24000
+efficiency = "efficient"
 # Run caps are optional. Omit them for unlimited model calls, elapsed time, and total tokens.
 # max_steps = 40
 # max_seconds = 1800

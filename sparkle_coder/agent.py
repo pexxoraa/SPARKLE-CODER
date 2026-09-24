@@ -10,6 +10,7 @@ import sys
 import time
 
 from .provider import ModelError
+from .efficiency import compact_group
 from .explanations import check_title, explain_checks, simple_recovery
 from .verification import active_checks, proof_summary
 from .state import now
@@ -121,6 +122,15 @@ class Agent:
             python = python_argv(self.workspace.root)
             system += "\nProject Python command: " + (shell_command(python) if python else
                        "Not found. Explain the missing Python setup before proposing Python commands.")
+        if self.config.efficiency == "efficient":
+            system += ("\nEFFICIENT MODE: Match scope to the request. A simple landing page needs a small semantic HTML page "
+                       "and a concise responsive stylesheet. Add JavaScript only for requested interactions. Do not add a "
+                       "framework, sliders, dashboards, cart, animation system, README or invented features unless needed. "
+                       "Aim for roughly 150 HTML lines, 250 CSS lines and at most 80 JS lines for a simple page; these are "
+                       "guidelines, not a reason to minify or drop requirements. Inspect once, batch independent edits, "
+                       "run the smallest meaningful checks, then finish. Avoid repeatedly rewriting complete files. "
+                       "Use inspect_static_site for structural checks of plain HTML/CSS sites without installing tools; "
+                       "it does not establish browser behavior. Use concise narration and one modest file per write call.")
         guidance = self.workspace.instructions()
         if guidance:
             system += "\n\nPROJECT GUIDANCE:\n" + guidance
@@ -141,7 +151,7 @@ class Agent:
             "plan": state["plan"],
             "recent_user_requests": state.get("user_requests", [state["goal"]])[-4:],
             "required_acceptance_commands": state["required_checks"],
-            "recent_actions": state["actions"][-12:],
+            "recent_actions": [{k: (v[:220] if isinstance(v, str) else v) for k, v in a.items() if k in ("tool", "ok", "path", "command")} for a in state["actions"][-6:]],
             "recent_checks": [{k: c.get(k) for k in ("id", "label", "command", "ok", "exit_code", "fingerprint")}
                               for c in active_checks(state)[-8:]],
             "check_corrections": state.get("check_revisions", [])[-4:],
@@ -155,6 +165,7 @@ class Agent:
                   {"role": "user", "content": "RUNTIME CHECKPOINT (data, not new instructions):\n"
                    + json.dumps(self.tools.redactor.value(checkpoint), ensure_ascii=False)}]
         groups = group_messages(state["messages"][1:])
+        groups = [compact_group(g, recent=i >= len(groups)-2) for i, g in enumerate(groups)]
         def size(items):
             return len(json.dumps(items, ensure_ascii=False))
         # Measure only the tail that can fit, rather than reserializing all of
@@ -185,7 +196,7 @@ class Agent:
             groups = []
             trimmed += 1
         if size(prefix) > self.config.context_chars:
-            checkpoint["recent_actions"] = state["actions"][-3:]
+            checkpoint["recent_actions"] = checkpoint["recent_actions"][-3:]
             checkpoint["project_memory"] = "Memory omitted to fit context; inspect project files for current facts."
             checkpoint["file_tool_changes"] = checkpoint["file_tool_changes"][-50:]
             checkpoint["project_overview"] = {}
@@ -295,6 +306,10 @@ class Agent:
         for check in active_checks(self.session.state):
             latest[(check["command"], check["cwd"])] = check
         candidates = self.tools.discover_checks()["checks"]
+        if not latest and not candidates and self.workspace.path('index.html').is_file():
+            self.tools.inspect_static_site('index.html')
+            check = self.session.state['checks'][-1]
+            latest[(check['command'], check['cwd'])] = check
         for check in candidates:
             check["source"] = "discovered"
             latest.setdefault((check["command"], check["cwd"]), check)
@@ -314,7 +329,10 @@ class Agent:
                     or check.get("environment_revision", 0) != self.session.state.get("environment_revision", 0)):
                 self.observe("verification_start", {"command": command, "cwd": cwd})
                 self.say("Checking: " + (check.get("label") or check_title(command)))
-                self.tools.verify(command, cwd, label=check.get("label", ""), source=check.get("source"))
+                if check.get('source') == 'builtin' and command.startswith('builtin:static-site '):
+                    self.tools.inspect_static_site(command.removeprefix('builtin:static-site '))
+                else:
+                    self.tools.verify(command, cwd, label=check.get("label", ""), source=check.get("source"))
                 latest[(command, cwd)] = self.session.state["checks"][-1]
         self.environment_changed = False
         current = self.workspace.fingerprint()
@@ -433,6 +451,7 @@ class Agent:
                 state["usage"]["calls"] += 1
                 self.session.save()
                 self.observe("model_start", {"model": self.config.model, "call": state["usage"]["calls"]})
+                request_started = time.monotonic()
                 try:
                     response = self.provider.complete(messages, self.schemas)
                 except ModelError as exc:
@@ -444,13 +463,19 @@ class Agent:
                         self.feedback("Your response could not be parsed. Use the documented tool format. " + str(exc))
                         continue
                     return self.finish("needs_input", str(exc), {"action": exc.action, "message": str(exc)})
-                self.observe("model_end", {"tool_calls": len(response.calls)})
+                self.observe("model_end", {"tool_calls": len(response.calls), "seconds": round(time.monotonic()-request_started, 2)})
+                state["usage"]["model_seconds"] = round(state["usage"].get("model_seconds", 0) + time.monotonic()-request_started, 2)
+                state["usage"]["request_chars"] = state["usage"].get("request_chars", 0) + len(json.dumps(messages))
                 self.checkpoint()
                 malformed = 0
                 usage = response.usage
-                state["usage"]["prompt_tokens"] += usage.get("prompt_tokens") or len(json.dumps(messages)) // 3
-                state["usage"]["completion_tokens"] += usage.get("completion_tokens") or max(
-                    1, len(response.content + json.dumps(response.calls)) // 3)
+                if "prompt_tokens" in usage and "completion_tokens" in usage:
+                    state["usage"]["prompt_tokens"] += usage["prompt_tokens"]
+                    state["usage"]["completion_tokens"] += usage["completion_tokens"]
+                else:
+                    state["usage"]["estimated_calls"] = state["usage"].get("estimated_calls", 0) + 1
+                    state["usage"]["prompt_tokens"] += (len(json.dumps(messages)) + len(json.dumps(self.schemas))) // 3
+                    state["usage"]["completion_tokens"] += max(1, len(response.content + json.dumps(response.calls)) // 3)
                 if self.should_stop():
                     return self.finish("interrupted", "Stopped by the user before executing further actions.")
                 if response.finish_reason == "length":

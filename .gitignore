@@ -26,3 +26,7 @@ PROJECTS/*
 !PROJECTS/README.md
 web-dist/
 .vercel/
+.wrangler/
+.owner/
+device-account.json
+out/

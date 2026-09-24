@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sparkle-coder"
-version = "0.6.3"
+version = "0.7.0"
 description = "SPARKLE CODER: a personal coding agent powered by NVIDIA Nemotron."
 requires-python = ">=3.11"
 dependencies = []
@@ -19,7 +19,7 @@ sparkle-coder-app = "sparkle_coder.web:main"
 include = ["sparkle_coder*"]
 
 [tool.setuptools.package-data]
-sparkle_coder = ["ui/*"]
+sparkle_coder = ["ui/*", "distribution.json"]
 
 [project.urls]
 Repository = "https://github.com/pexxoraa/SPARKLE-CODER"

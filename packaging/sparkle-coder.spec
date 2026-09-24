@@ -19,6 +19,7 @@ a = Analysis(
     pathex=[str(project_root)],
     binaries=[],
     datas=[
+        (str(project_root / 'sparkle_coder' / 'distribution.json'), 'sparkle_coder'),
         (str(project_root / "sparkle_coder" / "ui"), "sparkle_coder/ui"),
         (str(project_root / "OPEN_FIRST.html"), "."),
     ],

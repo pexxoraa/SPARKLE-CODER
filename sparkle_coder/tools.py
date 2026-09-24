@@ -23,6 +23,7 @@ def schema(name, description, properties, required=()):
 S = {"type": "string"}
 I = {"type": "integer"}
 SCHEMAS = [
+    schema("inspect_static_site", "Check plain HTML structure, links and local assets without running commands. Does not test rendered appearance or JavaScript behavior.", {"entry": S}, []),
     schema("inspect_setup", "Inspect project manifests and locate development tools without executing code. "
            "Use to investigate missing dependencies; this is not a verification pass.", {}),
     schema("discover_checks", "Find existing test, typecheck, lint and build commands. Does not execute them.", {}),
@@ -259,6 +260,21 @@ class ToolSet:
         if not result["ok"]:
             result["explanation"] = self.redactor.value(explain_failure(record))
         return result
+
+    def inspect_static_site(self, entry="index.html"):
+        from .static_checks import inspect_site
+        result = inspect_site(self.workspace, entry)
+        command = "builtin:static-site " + entry
+        record = {"id": "check-" + uuid.uuid4().hex[:12], "key": check_key(command),
+                  "label": "Static page structure and links", "source": "builtin", "at": now(),
+                  "command": command, "cwd": ".", "required": False, "ok": result["ok"],
+                  "exit_code": result["exit_code"], "fingerprint": self.workspace.fingerprint(),
+                  "environment_revision": self.session.state.get("environment_revision", 0),
+                  "output": result["output"]}
+        self.session.state["checks"].append(record)
+        self.session.state["verification_fingerprint"] = record["fingerprint"]
+        self.session.save()
+        return {**result, "check_id": record["id"], "label": record["label"]}
 
     def revise_check(self, check_ids, command, label, reason, evidence_path, expected_sha256, cwd="."):
         if not check_ids or len(check_ids) > 20 or not all(isinstance(x, str) for x in check_ids):

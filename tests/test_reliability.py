@@ -165,6 +165,7 @@ class RecoveryTransportTests(unittest.TestCase):
             return (503, {}) if count[0] == 1 else (200, {"choices": [{"message": {"content": "Recovered"}}]})
         with endpoint(respond) as (url, requests):
             client = NemotronClient(Config(base_url=url))
+            client.config._runtime_cloud = True
             events = []
             client.bind_runtime(lambda kind, data: events.append((kind, data)), lambda: False)
             with patch("sparkle_coder.provider.time.sleep"):
@@ -175,6 +176,7 @@ class RecoveryTransportTests(unittest.TestCase):
 
     def test_timeout_retries_and_stop_cancels_backoff(self):
         client = NemotronClient(Config())
+        client.config._runtime_cloud = True
         stop = threading.Event()
         client.bind_runtime(lambda *_: stop.set(), stop.is_set)
         with patch.object(client.opener, "open", side_effect=TimeoutError) as opened:
@@ -184,6 +186,7 @@ class RecoveryTransportTests(unittest.TestCase):
 
     def test_network_error_retries_then_recovers(self):
         client = NemotronClient(Config())
+        client.config._runtime_cloud = True
         raw = json.dumps({"choices": [{"message": {"content": "OK"}}]}).encode()
         with patch.object(client, "_read", side_effect=[urllib.error.URLError("offline"), raw]), \
                 patch("sparkle_coder.provider.time.sleep"):
@@ -197,6 +200,7 @@ class RecoveryTransportTests(unittest.TestCase):
             return 200, {"choices": [{"message": {"content": "Too late"}}]}
         with endpoint(respond) as (url, _):
             client = NemotronClient(Config(base_url=url))
+            client.config._runtime_cloud = True
             client.bind_runtime(lambda *_: None, stop.is_set)
             results = []
             def request():
@@ -283,4 +287,4 @@ class SettingsMigrationTests(unittest.TestCase):
             self.addCleanup(app.close)
             self.assertIsNone(app.config().command_timeout)
             self.assertEqual(app.config().max_steps, 40)
-            self.assertEqual(json.loads(app.settings_path.read_text())["settings_version"], 3)
+            self.assertEqual(json.loads(app.settings_path.read_text())["settings_version"], 4)

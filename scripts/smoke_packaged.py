@@ -18,11 +18,13 @@ from urllib.parse import parse_qs, urlsplit
 import zipfile
 
 
-def smoke(executable):
+def smoke(executable, bundled=False):
     with tempfile.TemporaryDirectory(prefix="sparkle-executable-") as temporary:
         root = Path(temporary)
         binary = root / executable.name
         shutil.copy2(executable, binary)
+        if bundled:
+            shutil.copytree(executable.parent / 'runtime', root / 'runtime', symlinks=True)
         directory = root / "APP_DATA"
         runtime_temp = root / "runtime-temp"
         runtime_temp.mkdir()
@@ -31,6 +33,10 @@ def smoke(executable):
                "XDG_CONFIG_HOME": str(root / "unused-config"),
                "LOCALAPPDATA": str(root / "unused-local-data"),
                "NVIDIA_API_KEY": "", "LOCAL_MODEL_API_KEY": ""}
+        if bundled:
+            env.pop('SPARKLE_PYTHON', None)
+            env['PATH'] = (str(Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32')
+                           if os.name == 'nt' else '/usr/bin:/bin')
         startup_log = root / "startup.log"
         with startup_log.open("wb") as stream:
             process = subprocess.Popen([str(binary), "--no-open"], cwd=root, env=env,
@@ -65,7 +71,7 @@ def smoke(executable):
             record = json.loads(instance.read_text("utf-8"))
             origin, local_token = record["origin"], record["token"]
             state, _ = request("/api/state")
-            assert state["version"] == "0.6.3", state["version"]
+            assert state["version"] == "0.7.0", state["version"]
             assert (root / "PROJECTS").is_dir(), "Projects must live beside the executable"
             html, _ = request("/")
             assert b"app.js" in html
@@ -101,6 +107,8 @@ def smoke(executable):
             else:
                 raise AssertionError("Packaged demo did not finish")
             assert approved, "The real command must require approval"
+            if bundled:
+                assert all(str(root / 'runtime') in c['command'] for c in run['session']['checks'])
             assert [c["ok"] for c in run["session"]["checks"]] == [False, True]
             prefix = "/api/projects/" + demo["project"]["id"]
             assert "calculator.py" in hosted(prefix + "/files")["files"]
@@ -138,5 +146,6 @@ def smoke(executable):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("executable", type=Path)
+    parser.add_argument('--bundled', action='store_true')
     args = parser.parse_args()
-    smoke(args.executable.resolve(strict=True))
+    smoke(args.executable.resolve(strict=True), args.bundled)

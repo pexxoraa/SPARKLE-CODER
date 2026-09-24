@@ -23,7 +23,7 @@ class StorageCompatibilityTests(unittest.TestCase):
             self.assertIsNone(app.config().max_steps)
             self.assertIsNone(app.config().max_seconds)
             self.assertIsNone(app.config().max_total_tokens)
-            self.assertEqual(app.data["settings_version"], 3)
+            self.assertEqual(app.data["settings_version"], 4)
             app.close()
 
     def test_rename_reuses_existing_project_data(self):

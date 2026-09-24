@@ -151,6 +151,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/state":
                 result = app.state()
                 result["hosted_ui"] = {"origin": self.server.hosted_origin}
+            elif path == '/api/account':
+                result = app.account.status()
             elif len(parts) == 3 and parts[:2] == ["api", "runs"]:
                 job = app.job(parts[2])
                 result = job.public(int(query.get("after", ["0"])[0]))
@@ -242,6 +244,16 @@ class Handler(BaseHTTPRequestHandler):
                 return
             elif path == "/api/settings":
                 result = app.configure(body)
+            elif path == '/api/account/enroll':
+                result = app.account.enroll(body)
+            elif path == '/api/account/payment':
+                result = app.account.payment(body)
+            elif path == '/api/account/reconnect':
+                if app.active():
+                    raise ValueError('Stop the running task before reconnecting the account.')
+                if body.get('confirm') is not True:
+                    raise ValueError('Confirm that this device will need admin approval again.')
+                result = app.account.reconnect()
             elif path == "/api/experience":
                 result = app.experience(body.get("experience"))
             elif path == "/api/connect":

@@ -78,8 +78,8 @@ def parse_completion(data: dict, tool_format: str) -> Completion:
             normalized.append({"id": call_id, "type": "function",
                                "function": {"name": function["name"], "arguments": arguments}})
         usage = data.get("usage") or {}
-        usage = {key: max(0, int(usage.get(key) or 0))
-                 for key in ("prompt_tokens", "completion_tokens")}
+        usage = ({key: max(0, int(usage[key])) for key in ("prompt_tokens", "completion_tokens")}
+                 if isinstance(usage, dict) and all(usage.get(k) is not None for k in ("prompt_tokens", "completion_tokens")) else {})
         return Completion(content, normalized, usage, reason)
     except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
         raise ModelError(f"Invalid model response: {exc}") from None
@@ -137,7 +137,11 @@ class NemotronClient:
         payload = None if body is None else json.dumps(body).encode("utf-8")
         if payload is not None:
             headers["Content-Type"] = "application/json"
-        for attempt in range(3):
+        if payload is not None and self.config._runtime_cloud:
+            headers["Idempotency-Key"] = uuid.uuid4().hex
+        attempts = 6 if self.config._runtime_cloud else 3
+        retry_transport = body is None or self.config._runtime_cloud
+        for attempt in range(attempts):
             if self.should_stop():
                 raise ModelError("Stopped by the user before the model request.")
             request = urllib.request.Request(self.config.base_url.rstrip("/") + path,
@@ -149,7 +153,11 @@ class NemotronClient:
                 return json.loads(raw)
             except urllib.error.HTTPError as exc:
                 exc.close()
-                if exc.code in (429, 500, 502, 503, 504) and attempt < 2:
+                if (exc.code == 429 or retry_transport and exc.code in (500, 502, 503, 504) or
+                        self.config._runtime_cloud and exc.code == 409 and exc.headers.get("Retry-After")) and attempt < attempts - 1:
+                    if self.config._runtime_cloud and exc.code == 429 and exc.headers.get('X-Sparkle-Safe-Retry') == 'true':
+                        # The gateway confirmed no inference charge for this ID.
+                        headers['Idempotency-Key'] = uuid.uuid4().hex
                     try:
                         delay = min(60, max(1, float(exc.headers.get("Retry-After", 2 ** attempt))))
                     except (ValueError, TypeError):
@@ -159,8 +167,9 @@ class NemotronClient:
                     self.wait_retry(delay)
                     continue
                 hints = {
-                    401: "Open Connect Nemotron, replace the API key, test the connection, then resume this task.",
-                    402: "Out of credits. Open Connect Nemotron to check your balance and top up.",
+                    401: ("Open Account and reconnect this device." if self.config._runtime_cloud else "Open Connect Nemotron, replace the API key, test the connection, then resume this task."),
+                    402: "Not enough available credits. Open Account to check the balance and request a top-up.",
+                    409: "An earlier request is still running or needs admin review. Open Account; this request will not be charged twice.",
                     403: "Check model access and endpoint permissions.",
                     404: "Check the base URL and exact model ID.",
                     400: "Check model tool support and extra_body; try JSON tool mode for a server without a tool parser.",
@@ -169,7 +178,7 @@ class NemotronClient:
                 raise ModelError(f"Model API HTTP {exc.code}. {hints.get(exc.code, 'The endpoint is unavailable. Resume this saved task when it recovers.')}",
                                  action="connection" if exc.code in (400, 401, 402, 403, 404) else "retry") from None
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                if attempt < 2:
+                if retry_transport and attempt < attempts - 1:
                     delay = 2 ** attempt
                     self.observe("model_retry", {"attempt": attempt + 2, "delay": delay,
                                                  "reason": f"Connection interrupted ({type(exc).__name__})"})
@@ -178,8 +187,8 @@ class NemotronClient:
                 hint = ("For a slow model, increase API response timeout under Connect Nemotron → Run and connection settings. "
                         if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError)
                         else "Check the server address and network connection. ")
-                raise ModelError(f"Cannot reach the model endpoint ({type(exc).__name__}). "
-                                 "Three connection attempts failed. " + hint + "Resume this task; your work is saved.") from None
+                raise ModelError(f"Cannot reach the model endpoint ({type(exc).__name__}). " +
+                                 ("Connection recovery attempts failed. " if retry_transport else "The request was not automatically repeated because the provider may already have processed it. ") + hint + "Resume this task; your work is saved.") from None
             except (json.JSONDecodeError, UnicodeDecodeError):
                 raise ModelError("The endpoint did not return valid JSON.") from None
 
@@ -232,6 +241,9 @@ class NemotronClient:
             "temperature": self.config.temperature, "top_p": self.config.top_p,
             "max_tokens": self.config.max_tokens, **self.config.extra_body,
         }
+        if "nemotron-3-" in self.config.model:
+            body["chat_template_kwargs"] = {**body.get("chat_template_kwargs", {}),
+                "enable_thinking": self.config.efficiency == "thorough", "force_nonempty_content": True}
         if self.config.tool_format == "native":
             body.update({"tools": schemas, "tool_choice": "auto"})
         return parse_completion(self.request("/chat/completions", body), self.config.tool_format)

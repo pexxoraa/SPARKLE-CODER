@@ -17,6 +17,7 @@ from .brief import read_brief, save_brief
 from .diagnostics import inspect_setup
 from .demo import DemoProvider, calls, python_command
 from .provider import NemotronClient
+from .cloud import CloudAccount, distribution
 from .monitor import Run, ACTIVE, session_events
 from .files import UserFiles
 from .storage import resolve_storage, relocate, migrate_legacy, retry_migration, reconnect_portable_projects
@@ -54,8 +55,8 @@ def legacy_app_dirs() -> tuple[Path, Path]:
 
 
 SETTINGS = ("base_url", "model", "tool_format", "execution", "max_steps", "max_seconds",
-            "max_total_tokens", "max_tokens", "request_timeout", "command_timeout")
-SETTINGS_SCHEMA_VERSION = 3
+            "max_total_tokens", "max_tokens", "request_timeout", "command_timeout", "context_chars", "efficiency")
+SETTINGS_SCHEMA_VERSION = 4
 LEGACY_RUN_CAPS = {"max_steps": 40, "max_seconds": 1800, "max_total_tokens": 250000}
 
 
@@ -83,6 +84,7 @@ class AppService:
             migrate_legacy(self.bootstrap, application_root() / "PROJECTS", legacy_app_dirs())
         self.directory = resolve_storage(self.bootstrap)
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.account = CloudAccount(self.directory, distribution())
         self.settings_path = self.directory / "settings.json"
         if self.settings_path.is_symlink():
             raise ValueError("Application settings must not be a symlink.")
@@ -114,6 +116,11 @@ class AppService:
                 self.data["settings"]["command_timeout"] = None
             if saved_version < 3 and self.data["settings"].get("request_timeout") == 120:
                 self.data["settings"]["request_timeout"] = 300
+            if saved_version < 4:
+                if self.data['settings'].get('max_tokens') == 16000:
+                    self.data['settings']['max_tokens'] = 4096
+                if self.data['settings'].get('context_chars') == 120000:
+                    self.data['settings']['context_chars'] = 24000
             migrated = migrated or saved_version < SETTINGS_SCHEMA_VERSION
         self.lock = threading.RLock()
         self.keys = {}
@@ -153,16 +160,27 @@ class AppService:
                 config._runtime_api_key = os.environ.get("LOCAL_MODEL_API_KEY", "")
             if urlsplit(endpoint).hostname != "integrate.api.nvidia.com" and config.extra_body == Config().extra_body:
                 config.extra_body = {}
+            if self.account.url:
+                config.base_url = self.account.url + '/v1'
+                config.model = 'nvidia/nemotron-3-super-120b-a12b'
+                config._runtime_api_key = self.account.secret
+                config._runtime_cloud = True
+                config.extra_body = {}
+                config.max_tokens = min(config.max_tokens, 8192)
+                config.context_chars = min(config.context_chars, 30000)
             config.validate()
             return config
 
     def public_settings(self):
         config = self.config()
-        return {**self.data["settings"], "cloud_gateway_url": SPARKLE_GATEWAY_URL, "key_configured": bool(config.api_key),
+        return {**self.data["settings"], "base_url": config.base_url, "model": config.model,
+                "cloud_gateway_url": self.account.url + '/v1' if self.account.url else SPARKLE_GATEWAY_URL, "key_configured": bool(config.api_key),
                 "key_source": ("memory" if config.base_url.rstrip("/") in self.keys else "environment") if config.api_key else "none",
                 "connected": self.connected_endpoint == (config.base_url, config.model)}
 
     def configure(self, payload):
+        if self.account.url and set(payload).intersection({'base_url', 'model', 'api_key', 'clear_key', 'tool_format'}):
+            raise ValueError('Your model connection is managed by the admin. Open Account to request access or credits.')
         if not isinstance(payload, dict) or set(payload) - set(SETTINGS) - {"api_key", "clear_key"}:
             raise ValueError("Invalid settings.")
         with self.lock:
@@ -290,6 +308,7 @@ class AppService:
                     "experience": self.data["experience"],
                     "selected_project": self.data["selected_project"],
                     "settings": self.public_settings(), "active_run": job.public() if job else None,
+                    "account": dict(self.account.cached),
                     "storage": {"path": str(self.directory), "projects_path": str(self.projects_directory),
                                 "migration": self.data.get("storage_migration")}}
 
@@ -516,7 +535,9 @@ class AppService:
         with self.lock:
             if self.active():
                 raise ValueError("Finish or stop the active task before switching data folders.")
-            return relocate(self, path)
+            result = relocate(self, path)
+            self.account.path = self.directory / 'device-account.json'
+            return result
 
     def retry_project_migration(self):
         with self.lock:

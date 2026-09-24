@@ -1,110 +1,59 @@
-# Validation report — SPARKLE CODER 0.6.3
+# Validation report — SPARKLE CODER 0.7.0
 
-Validated on Linux with Python 3.12 on 2026-09-24.
+Validated on Linux on 2026-09-24. No real NVIDIA key or payment was used.
 
-**174 Python tests pass.** The full output is in [TEST_RESULTS.txt](TEST_RESULTS.txt).
-All four JavaScript scripts pass through `npm test`. The static website builds
-with `npm run build`. `git diff --check` passes.
+## Automated results
 
-## Repairs verified
+- **179 Python tests passed**, including the previous storage, permissions,
+  cancellation, repair and packaged-runtime regressions.
+- **13 gateway tests passed** using the real SQL migration, SQLite transactions,
+  Web Crypto and the actual Worker request handler with a mocked NVIDIA upstream.
+- **Four JavaScript test scripts passed** for browser transport, hosted pairing,
+  explanations and project recovery. Application and admin scripts parse.
+- A desktop-to-gateway integration test starts a local HTTP server running the
+  Worker handler and database. The desktop enrolls, submits a payment reference,
+  the admin approves it, the desktop makes an inference call, provider-reported
+  usage is debited, and reopening the app retains the account and balance.
+- Structural site verification catches a broken linked stylesheet, rechecks after
+  repair, and explicitly disclaims browser/JavaScript verification. No shell
+  permission is bypassed.
+- Retry tests verify a stable request ID for ambiguous transport retries and
+  no blind repeat of ambiguous paid requests to a direct provider.
 
-- A simulated frozen application completes the scripted demo using a separate
-  Python interpreter. Discovered checks use that interpreter, not the GUI binary.
-  A project virtual environment takes precedence. Missing Python is explained
-  through setup diagnostics.
-- Moving an app reconnects existing managed projects inside its current PROJECTS
-  directory. Old Linux and Windows paths, unavailable external folders, saved
-  history and existing recovery behavior are covered.
-- The folder picker returns the selected path when stdout is unavailable. Cancel
-  and helper failure remain distinct, and the private temporary result is removed.
-  These are mocked windowless/Tk tests, not native Windows GUI validation.
-- Optional balance calls use a three-second deadline, make no retry, and tolerate
-  missing/invalid responses. NVIDIA and custom endpoints skip this optional call.
-  A configured gateway supplies the URL used by the preset and access link.
-- The release workflow grants `contents: write` only to its release job. All three
-  platform jobs now invoke the packaged executable smoke check before upload.
+Gateway checks cover exact ₹15 / 1,000,000-token packs, duplicate approval and
+UTR rejection, insufficient balances, concurrent reservations, account isolation,
+manual device recovery/revocation, admin sessions and same-origin enforcement,
+provider-secret redaction, immutable ledger records, response encryption/expiry,
+stale request holds, and usage reconciliation. Tests do not establish D1's deployed
+latency, Workers CPU consumption, NVIDIA rate limits, or 50-user throughput.
 
-## Website-to-engine HTTP boundary
+## Efficiency evidence
 
-Six dedicated hosted-interface tests exercise actual loopback HTTP requests:
+A synthetic completed write plus diff containing 1,448 repeated CSS lines shrank
+from **72,707 to 2,466 serialized characters (96.6%)** in the model-request copy.
+The original history was unchanged and tool-call/result IDs stayed paired. This
+is a fixture measurement, not the user's original flower-shop run or a model
+billing benchmark. Default output is now 4,096 tokens, context target 24,000
+characters, and Nemotron reasoning is disabled in Fast mode.
 
-- Only an authenticated local-origin request can pair a website.
-- The paired website can create a project, read files and download a file.
-- The exact approved origin and its separate random token are both required.
-- Preflight responses permit only expected methods/headers for the approved site.
-- Re-pairing and disconnecting revoke previous tokens; the local app stays usable.
-- Website addresses containing credentials, extra paths, malformed ports or
-  insecure remote origins are rejected.
+## Executable and deployment limits
 
-The JavaScript hosted-interface test covers loopback-only engine addresses,
-authenticated request/download routing, configured gateway links and the
-unpaired state. DOM doubles do not establish browser rendering or network policy.
+The Linux PyInstaller executable was rebuilt for 0.7.0 and passed the actual
+executable smoke test with a provided project Python interpreter: startup,
+PROJECTS persistence, paired API access, approval, real repair/checks, downloads,
+revocation and clean shutdown. This is separate from the new bundled-Python gate.
+Downloading the portable Python runtime was blocked by network timeouts in this
+workspace. The GitHub matrix is responsible for verifying the exact bundled
+runtime and the Windows install/update/uninstall sequence; see its run result.
 
-## Actual Linux executable
+The minimalist app and admin UI have script/static checks, not a verified browser
+visual pass. This environment's cloud browser cannot connect to the local app.
+Cloudflare dashboard navigation remained on its security-verification page after
+one reload. No live Cloudflare deployment, live admin URL, provider credential,
+real UPI confirmation, real-model cost/speed result or 30–50-user load result is
+claimed. The owner setup script and tester-build configuration are supplied in
+[PILOT_SETUP.md](PILOT_SETUP.md).
 
-Built `dist/SparkleCoder` using PyInstaller and ran
-`python3 scripts/smoke_packaged.py dist/SparkleCoder` successfully.
-
-The script copies the executable into a disposable directory and verifies:
-
-1. The packaged application starts, reports version 0.6.3 and stores PROJECTS
-   beside its executable.
-2. Pairing supplies a separate website token and the expected preflight headers.
-3. The demo waits for command approval, runs real Python, records its deliberate
-   failing check, repairs the calculator, then records a passing check.
-4. The paired client reads the repaired file and saved task history and downloads
-   both the file and a project ZIP containing the repair.
-5. Disconnecting rejects the old website token. Local control and graceful
-   shutdown still work; the instance marker is removed.
-
-The first smoke attempt could not use this environment's default temporary
-location. The fixture now supplies an explicitly writable temporary directory.
-No application permission or security control was disabled.
-
-Model responses are scripted. This check validates the executable, commands and
-HTTP integration, not live Nemotron quality or browser CORS enforcement. The
-available build environment could not resolve its Tcl/Tk shared libraries, so
-native dialogs were not verified in the produced artifact. Do not distribute it
-as a tested native-dialog build; build and check the target platform artifacts.
-
-## Retained regression coverage
-
-The suite also covers startup with missing folders and abandoned/live locks,
-process concurrency, project migration and reconnection, session preservation,
-file import/export/undo, command approval/cancellation, requirements and briefs,
-setup scans, repair reviews, stale evidence, the 36-versus-54 test correction,
-protected required checks, retries and saved-session recovery.
-
-## Build and deployment state
-
-The web output contains exactly index.html, app.js, app.css, favicon.svg and
-robots.txt. A separate prepared deployment folder adds only vercel.json.
-No PROJECTS, APP_DATA, keys, private settings, logs or engine code is included.
-A credential-pattern scan of the web assets found no matches; the explicit file
-allowlist is the primary control for excluding runtime data.
-
-**No live Vercel deployment has been verified.** The initial unspecified deploy
-was rejected by automatic approval review. A narrowed request for only the
-reviewed static assets reached the connected service, which returned
-`Tool deploy_to_vercel not found`. No authenticated Vercel CLI is configured in
-this workspace. The connected account returned no teams or projects.
-
-The cloud browser blocked the local URL with `net::ERR_BLOCKED_BY_CLIENT`.
-Visual layout, browser network permissions and actual HTTPS-to-loopback pairing
-remain unverified. HTTP tests are not a substitute for that browser check.
-
-## Remaining limits
-
-- Windows/macOS executables and native folder selection require real-platform
-  checks. The updated GitHub build workflow has not yet run for this release.
-- Live Nemotron task quality, provider cost, model choice and GPU behavior were
-  not benchmarked. No live inference credentials were used.
-- The separate Sparkle Cloud gateway backend was absent. Authentication,
-  metering, payment handling and live NVIDIA forwarding were not validated.
-- The website needs a running local engine on the same computer. This release
-  adds neither an always-on cloud engine nor phone remote access.
-- Live app preview, automated browser tests for generated projects, editor
-  suggestions, parallel agents and the remaining roadmap stages are still planned.
-
-Passing tests establish the assertions above, not feature parity with other
-coding platforms or superior model intelligence.
+Before rollout: deploy with the owner's settings, verify one actual payment,
+build the configured tester installer, run a flower-shop task, inspect desktop
+and mobile output and record provider usage, calls and elapsed time.

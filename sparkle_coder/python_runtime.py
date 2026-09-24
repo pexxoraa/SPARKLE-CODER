@@ -37,6 +37,11 @@ def python_argv(project=None):
         return usable(shutil.which(configured) or configured)
     if not frozen and (found := usable(sys.executable)):
         return found
+    if frozen:
+        bundled = Path(sys.executable).resolve().parent / 'runtime' / 'python'
+        for relative in ('python.exe', 'bin/python3', 'bin/python'):
+            if found := usable(bundled / relative):
+                return found
     for name in ("python3", "python"):
         if found := usable(shutil.which(name)):
             return found

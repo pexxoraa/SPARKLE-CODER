@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sparkle-pilot",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "triggers": {"crons": ["*/15 * * * *"]},
+  "assets": {"directory": "./public", "binding": "ASSETS", "run_worker_first": true},
+  "d1_databases": [{"binding": "DB", "database_name": "sparkle-pilot", "database_id": "REPLACE_AFTER_DATABASE_CREATE", "migrations_dir": "migrations"}],
+  "vars": {
+    "MODEL": "nvidia/nemotron-3-super-120b-a12b",
+    "MAX_MEMBERS": "50",
+    "MAX_INFLIGHT": "3",
+    "UPI_ID": "",
+    "PAYEE_NAME": "",
+    "SUPPORT_EMAIL": ""
+  },
+  "observability": {"enabled": false}
+}
