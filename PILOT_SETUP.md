@@ -103,6 +103,9 @@ held for **Usage holds** review. Settle only confirmed provider usage; never gue
   shell commands just to verify local links and markup structure. They do not
   claim to test appearance, JavaScript behavior or full accessibility.
 - File review is optional and initially off; shell-command approvals remain on.
+- Busy managed requests wait and retry for up to the default five-minute
+  recovery window instead of stopping after a few seconds. Account refresh uses
+  one server request to reduce free-host quota usage.
 - Gateway request IDs prevent duplicate inference on transport retries. Direct
   providers are not blindly retried after ambiguous paid POST failures.
 

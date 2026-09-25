@@ -1,10 +1,10 @@
 # Validation report — SPARKLE CODER 0.7.0
 
-Validated on Linux on 2026-09-24. No real NVIDIA key or payment was used.
+Validated locally on Linux and through native GitHub runners on 2026-09-25. No real NVIDIA key or payment was used.
 
 ## Automated results
 
-- **179 Python tests passed**, including the previous storage, permissions,
+- **180 Python tests passed**, including the previous storage, permissions,
   cancellation, repair and packaged-runtime regressions.
 - **13 gateway tests passed** using the real SQL migration, SQLite transactions,
   Web Crypto and the actual Worker request handler with a mocked NVIDIA upstream.
@@ -42,9 +42,24 @@ The Linux PyInstaller executable was rebuilt for 0.7.0 and passed the actual
 executable smoke test with a provided project Python interpreter: startup,
 PROJECTS persistence, paired API access, approval, real repair/checks, downloads,
 revocation and clean shutdown. This is separate from the new bundled-Python gate.
-Downloading the portable Python runtime was blocked by network timeouts in this
-workspace. The GitHub matrix is responsible for verifying the exact bundled
-runtime and the Windows install/update/uninstall sequence; see its run result.
+Portable Python downloads timed out in the local workspace. Native GitHub
+runners downloaded and verified the actual bundled runtime successfully on
+**Windows, macOS and Linux**. Windows additionally built the Setup EXE, installed
+it, ran the installed app's smoke check, reinstalled over existing sample user
+data and uninstalled while preserving PROJECTS and APP_DATA.
+
+[Verified build run](https://github.com/pexxoraa/SPARKLE-CODER/actions/runs/36090341200)
+for code commit `ee355cbed40dcea79dfb8b66ecdc6f892fe7f6e4` passed all verification
+and build jobs. The release job was skipped because this was a branch build.
+Artifacts are **personal edition** because SPARKLE_PILOT_URL is not configured;
+they are not the connected tester distribution. Configure the server origin and
+run the installer workflow with its tester option before distributing.
+
+The first Windows run caught a short-path/long-path mismatch in the smoke-test
+assertion. The fixed assertion resolves the actual interpreter path, confirms
+that it is inside the copied runtime, and cleans up the disposable app process.
+The rerun passed. The Worker also passed a Wrangler deploy dry run (bundle and
+bindings validated; this did not deploy a live service).
 
 The minimalist app and admin UI have script/static checks, not a verified browser
 visual pass. This environment's cloud browser cannot connect to the local app.
