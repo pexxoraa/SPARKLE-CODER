@@ -2,8 +2,9 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SPARKLE · Admin</title><link rel="stylesheet" href="/admin.css"><script src="/admin.js" defer></script></head>
 <body><header><a href="/">SPARKLE</a><span>Admin</span><button id="refresh" hidden>Refresh</button><button id="logout" hidden>Sign out</button></header>
 <main><p id="notice" role="status"></p><section id="login"><h1>Sign in</h1><p>Use the admin password saved during server setup.</p><form id="loginForm"><label for="password">Admin password</label><input id="password" type="password" required autocomplete="current-password"><button>Sign in</button></form></section>
-<div id="dashboard" hidden><h1>Tester accounts</h1><p id="settings"></p><div class="stats" id="stats"></div>
-<nav aria-label="Admin sections"><a href="#payments">Payments</a><a href="#accounts">Accounts</a><a href="#devices">Device requests</a><a href="#requests">Usage holds</a><a href="#audit">Audit</a></nav>
+<div id="dashboard" hidden><h1>Tester accounts</h1><p id="settings"></p><p id="syncStatus" role="status" class="muted"></p><div class="stats" id="stats"></div>
+<nav aria-label="Admin sections"><a href="#signups">Account requests</a><a href="#payments">Payments</a><a href="#accounts">Accounts</a><a href="#devices">Device reconnections</a><a href="#requests">Usage holds</a><a href="#audit">Audit</a></nav>
+<section id="signups"><h2>Account requests</h2><p>New account requests appear here before payment. A request alone adds no credits. Match the tester's payment in your bank app, then approve its payment reference below.</p><div id="signupList"></div></section>
 <section id="payments"><h2>Payments to review</h2><p>Open your bank or UPI app. Match the reference, amount and payer before accepting. A submitted reference is not proof of payment.</p><div id="paymentList"></div></section>
 <section id="accounts"><h2>Accounts</h2><div class="scroll"><table><thead><tr><th>Member</th><th>Status</th><th>Available</th><th>Held</th><th>Action</th></tr></thead><tbody id="accountRows"></tbody></table></div></section>
 <section id="devices"><h2>Device reconnections</h2><p>Confirm the request with the account owner using a contact you already trust. Accepting signs out their previous device and preserves their credits.</p><div id="deviceList"></div></section>

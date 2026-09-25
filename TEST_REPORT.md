@@ -2,6 +2,28 @@
 
 Validated locally on Linux and through native GitHub runners on 2026-09-25. No real NVIDIA key or payment was used.
 
+## Account request visibility repair — 2026-09-25
+
+The available repository stored new signups and included them in the admin API,
+but its request cards filtered for device recovery only. The dashboard also had
+no automatic refresh. The repair adds an Account requests section before
+payments, refreshes while visible, preserves unfinished payment review inputs,
+and prevents a response arriving after logout from reopening the dashboard.
+Signup returns a persisted request reference and records an audit event in the
+same transaction. A storage failure cannot leave an orphan account or receipt.
+The desktop requires an account acknowledgment and no longer makes a redundant
+status call that could turn a successful signup into an apparent network error.
+
+Verification uses the actual Worker and SQLite, the shipped admin script with
+a DOM harness, and the desktop-to-gateway HTTP integration. It covers signup
+visibility before payment, automatic refresh, preserved review input, stale
+lists, logout races, payment activation, single crediting and retry receipts.
+**198 Python tests, 21 gateway/admin tests and four JavaScript checks passed.**
+The current browser workspace differs from this checkout. The newly supplied
+`SPARKLE-CODER(1).zip` could not be read because it exceeds the 32 MiB transfer
+limit. These changes have not been applied to that unseen version or the live
+Worker, and no real payment or NVIDIA request was performed.
+
 ## Cloudflare deployment handling repair — 2026-09-25
 
 The owner's latest terminal output confirms the initial remote migration
