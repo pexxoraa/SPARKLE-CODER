@@ -1,5 +1,5 @@
 PRAGMA foreign_keys = ON;
--- Inference responses expire after 15 minutes; a scheduled job clears ciphertext.
+-- Inference responses expire after 15 minutes. A scheduled job clears ciphertext.
 CREATE TABLE accounts (
   id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
   name TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '',
@@ -52,28 +52,12 @@ CREATE INDEX sessions_expiry ON admin_sessions(expires);
 CREATE INDEX rates_expiry ON rate_windows(expires);
 CREATE INDEX audit_created ON audit(created DESC);
 -- Credits and holds are changed only by state transitions inside SQLite transactions.
-CREATE TRIGGER payment_credit AFTER UPDATE OF status ON payments
-WHEN OLD.status = 'pending' AND NEW.status = 'approved'
-BEGIN
-  INSERT INTO ledger VALUES ('payment:'||NEW.id, NEW.account_id, NEW.credits, 'payment', 'payment:'||NEW.id, NEW.reviewed, NEW.utr);
-  UPDATE accounts SET balance=balance+NEW.credits, status='active' WHERE id=NEW.account_id AND status!='suspended';
-  SELECT CASE WHEN changes()!=1 THEN RAISE(ABORT,'Account is suspended') END;
-  UPDATE devices SET status='active' WHERE id=NEW.device_id AND status='pending' AND kind='signup';
-END;
-CREATE TRIGGER request_hold AFTER INSERT ON requests
-WHEN NEW.state='inflight'
-BEGIN
-  UPDATE accounts SET held=held+NEW.reserve WHERE id=NEW.account_id;
-END;
-CREATE TRIGGER request_settle AFTER UPDATE OF state ON requests
-WHEN OLD.state IN ('inflight','uncertain') AND NEW.state IN ('succeeded','failed','resolved')
-BEGIN
-  SELECT CASE WHEN NEW.charged > OLD.reserve THEN RAISE(ABORT,'Usage exceeds reservation') END;
-  UPDATE accounts SET held=held-OLD.reserve, balance=balance-NEW.charged WHERE id=NEW.account_id;
-  INSERT INTO ledger VALUES ('request:'||NEW.id, NEW.account_id, -NEW.charged, 'usage', 'request:'||NEW.id, NEW.completed, NEW.note);
-END;
-CREATE TRIGGER payment_final BEFORE UPDATE OF status ON payments
-WHEN OLD.status != 'pending' AND NEW.status != OLD.status
-BEGIN SELECT RAISE(ABORT,'Payment already reviewed'); END;
+-- Keep each trigger on one LF-terminated line, with uppercase BEGIN/END and no
+-- nested CASE/END. D1's remote SQL splitter can truncate those compound bodies.
+-- SELECT RAISE(...) WHERE ... keeps the same guards and statement rollback.
+CREATE TRIGGER payment_credit AFTER UPDATE OF status ON payments WHEN OLD.status = 'pending' AND NEW.status = 'approved' BEGIN INSERT INTO ledger VALUES ('payment:'||NEW.id, NEW.account_id, NEW.credits, 'payment', 'payment:'||NEW.id, NEW.reviewed, NEW.utr); UPDATE accounts SET balance=balance+NEW.credits, status='active' WHERE id=NEW.account_id AND status!='suspended'; SELECT RAISE(ABORT,'Account is suspended') WHERE changes()!=1; UPDATE devices SET status='active' WHERE id=NEW.device_id AND status='pending' AND kind='signup'; END;
+CREATE TRIGGER request_hold AFTER INSERT ON requests WHEN NEW.state='inflight' BEGIN UPDATE accounts SET held=held+NEW.reserve WHERE id=NEW.account_id; END;
+CREATE TRIGGER request_settle AFTER UPDATE OF state ON requests WHEN OLD.state IN ('inflight','uncertain') AND NEW.state IN ('succeeded','failed','resolved') BEGIN SELECT RAISE(ABORT,'Usage exceeds reservation') WHERE NEW.charged > OLD.reserve; UPDATE accounts SET held=held-OLD.reserve, balance=balance-NEW.charged WHERE id=NEW.account_id; INSERT INTO ledger VALUES ('request:'||NEW.id, NEW.account_id, -NEW.charged, 'usage', 'request:'||NEW.id, NEW.completed, NEW.note); END;
+CREATE TRIGGER payment_final BEFORE UPDATE OF status ON payments WHEN OLD.status != 'pending' AND NEW.status != OLD.status BEGIN SELECT RAISE(ABORT,'Payment already reviewed'); END;
 CREATE TRIGGER ledger_no_update BEFORE UPDATE ON ledger BEGIN SELECT RAISE(ABORT,'Ledger is immutable'); END;
 CREATE TRIGGER ledger_no_delete BEFORE DELETE ON ledger BEGIN SELECT RAISE(ABORT,'Ledger is immutable'); END;

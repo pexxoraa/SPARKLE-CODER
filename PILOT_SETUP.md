@@ -33,6 +33,44 @@ the saved deployment configuration. If database creation succeeded but parsing
 its identifier failed, copy that database ID into `.owner/wrangler.json` first.
 Do not create a new database for an app update: balances live in the original DB.
 
+### Recover from `incomplete input: SQLITE_ERROR [code: 7500]`
+
+This error can occur when D1's remote SQL parser splits a trigger body. It does
+not mean your Cloudflare login or UPI ID is wrong. The initial migration now uses
+single-line, uppercase trigger bodies without nested `CASE ... END`, and setup
+normalizes SQL files to LF before applying them.
+
+Update the source in the **same SPARKLE-CODER folder**, retaining
+`gateway/.owner`, `PROJECTS` and `APP_DATA`, then run:
+
+```sh
+python scripts/setup_cloud.py
+```
+
+For a Git checkout, use `git pull --ff-only` first. If you downloaded a ZIP,
+replace `scripts/setup_cloud.py` and `gateway/migrations/0001_pilot.sql` with
+the updated versions. Do not replace or share the private `.owner` directory.
+Press Enter to keep the saved payment details. Enter the NVIDIA key only when
+the hidden terminal prompt asks for it.
+
+Setup reuses the saved database name and ID. If D1 still reports this specific
+SQL error, setup first verifies that the database has no application tables or
+applied migrations, then retries through Wrangler's SQL-file import path. The
+schema and migration-history entry are imported together. Setup refuses this
+recovery on populated databases and verifies the schema and history before
+deploying the Worker. It never drops or recreates the database.
+
+To check the migration files without logging in or changing Cloudflare:
+
+```sh
+python scripts/setup_cloud.py --check
+```
+
+This is a local SQL check, not proof of a successful remote deployment. Wait
+for setup to print both **Server:** and **Admin:** before building the tester
+installer. If it stops again, retain the configuration and share the error text
+without keys or the admin password.
+
 ## Owner: produce the tester installer
 
 1. Open this GitHub repository's **Settings → Secrets and variables → Actions → Variables**.

@@ -2,6 +2,34 @@
 
 Validated locally on Linux and through native GitHub runners on 2026-09-25. No real NVIDIA key or payment was used.
 
+## Cloudflare migration repair — 2026-09-25
+
+The owner reported `incomplete input: SQLITE_ERROR [code: 7500]` from remote
+`d1 migrations apply`. The earlier SQLite tests did not exercise D1's remote
+statement parser. The migration now avoids nested `CASE ... END` in triggers,
+uses single-line uppercase trigger bodies, and enforces LF SQL line endings.
+Setup reuses the saved database, checks migration history before deploying,
+and can retry the initial schema through Wrangler file import only after
+confirming that there are no application objects or applied migrations.
+
+- **190 Python tests passed**, including 10 owner-setup tests: normalized ZIP
+  line endings, invalid SQL before cloud writes, same-database recovery,
+  preserved data and owner credentials, refusal to import over existing data
+  or migration history, failure/cancellation handling, and secrets via stdin.
+- **15 gateway tests passed**, adding direct database regressions for suspended
+  payment rollback and over-reservation settlement rollback. Successful credit,
+  hold and usage transitions still execute atomically.
+- The recovery orchestration tests simulate the Cloudflare CLI responses and
+  use local SQLite for import effects. They do not prove remote D1 execution.
+- `python scripts/setup_cloud.py --check` passes without cloud authentication.
+- **The actual Wrangler/local-D1 migration test passed**: normal migration,
+  repeat migration with a retained account, SQL-file import with its completion
+  record, and matching table/index/trigger inventories. This test is now a CI
+  gate and still does not exercise the remote D1 parser or a live import.
+
+Remote retry remains with the owner's authenticated Cloudflare terminal. No
+remote deployment or resolution on the owner's actual database is claimed.
+
 ## Automated results
 
 - **180 Python tests passed**, including the previous storage, permissions,

@@ -130,3 +130,24 @@ test('scheduled cleanup expires response content and flags abandoned holds witho
  assert.equal(f.env.DB.db.prepare('SELECT state FROM requests WHERE id=?').get('abandoned').state,'uncertain');
  const a=(await f.api('/api/me')).body;assert.equal(a.balance_tokens,999850);assert.equal(a.held_tokens,100);
 });
+test('payment trigger rolls back payment and ledger when the account is suspended',async()=>{
+ const f=fixture();const account=await f.enroll();const payment=await f.api('/api/payments',{utr:'SUSPEND12345678'});
+ const db=f.env.DB.db;db.prepare("UPDATE accounts SET status='suspended' WHERE id=?").run(account.id);
+ assert.throws(()=>db.prepare("UPDATE payments SET status='approved',reviewed=1 WHERE id=?").run(payment.body.id),/Account is suspended/);
+ assert.equal(db.prepare('SELECT status FROM payments').get().status,'pending');
+ assert.equal(db.prepare('SELECT balance FROM accounts').get().balance,0);
+ assert.equal(db.prepare('SELECT status FROM devices').get().status,'pending');
+ assert.equal(db.prepare('SELECT COUNT(*) AS n FROM ledger').get().n,0);
+});
+test('settlement exceeding the reservation rolls back without losing the hold or charging',async()=>{
+ const f=fixture();await f.approve();const account=(await f.api('/api/me')).body.id,db=f.env.DB.db;
+ db.prepare("INSERT INTO requests(id,account_id,payload_hash,reserve,state,created) VALUES ('guard-test',?,'hash',100,'inflight',1)").run(account);
+ assert.throws(()=>db.exec("UPDATE requests SET state='succeeded',charged=101,completed=2 WHERE id='guard-test'"),/Usage exceeds reservation/);
+ let me=(await f.api('/api/me')).body;assert.equal(me.balance_tokens,1000000);assert.equal(me.held_tokens,100);
+ assert.equal(db.prepare("SELECT state FROM requests WHERE id='guard-test'").get().state,'inflight');
+ assert.equal(db.prepare('SELECT COUNT(*) AS n FROM ledger').get().n,1);
+ db.exec("UPDATE requests SET state='succeeded',charged=100,completed=2 WHERE id='guard-test'");
+ me=(await f.api('/api/me')).body;assert.equal(me.balance_tokens,999900);assert.equal(me.held_tokens,0);
+ db.exec("UPDATE requests SET state='succeeded' WHERE id='guard-test'");
+ assert.equal(db.prepare('SELECT COUNT(*) AS n FROM ledger').get().n,2);
+});

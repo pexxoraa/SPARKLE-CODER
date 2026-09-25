@@ -25,6 +25,10 @@ jobs:
           node-version: "24"
       - run: python -m unittest discover -s tests -v
       - run: npm test --prefix gateway
+      - name: Verify Cloudflare migration with the local D1 runtime
+        run: |
+          npm ci --prefix gateway
+          npm run test:migrations --prefix gateway
       - name: Verify browser helpers
         run: |
           node tests/test_ui_client.js
