@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,7 @@ import zipfile
 
 def smoke(executable, bundled=False):
     with tempfile.TemporaryDirectory(prefix="sparkle-executable-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         binary = root / executable.name
         shutil.copy2(executable, binary)
         if bundled:
@@ -108,7 +109,9 @@ def smoke(executable, bundled=False):
                 raise AssertionError("Packaged demo did not finish")
             assert approved, "The real command must require approval"
             if bundled:
-                assert all(str(root / 'runtime') in c['command'] for c in run['session']['checks'])
+                for check in run['session']['checks']:
+                    interpreter = shlex.split(check['command'], posix=os.name != 'nt')[0].strip('"')
+                    assert Path(interpreter).resolve().is_relative_to((root / 'runtime').resolve()), check['command']
             assert [c["ok"] for c in run["session"]["checks"]] == [False, True]
             prefix = "/api/projects/" + demo["project"]["id"]
             assert "calculator.py" in hosted(prefix + "/files")["files"]
@@ -135,7 +138,19 @@ def smoke(executable, bundled=False):
             print("Model replies were scripted. Browser rendering and native folder dialogs were not tested.")
         finally:
             if process.poll() is None:
-                process.terminate()
+                if origin and local_token:
+                    try:
+                        request('/api/quit', {})
+                        process.wait(timeout=10)
+                    except (OSError, ValueError, subprocess.TimeoutExpired):
+                        pass
+            if process.poll() is None:
+                if os.name == 'nt':
+                    # One-file PyInstaller has a child process holding the log.
+                    subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    process.terminate()
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:

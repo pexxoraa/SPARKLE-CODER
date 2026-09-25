@@ -75,9 +75,8 @@ class CloudAccount:
 
     def status(self):
         with self.lock:
-            info = self.request('/api/info')
-            account = self.request('/api/me') if self.secret else {}
-            self.cached = {**info, **account, 'enabled': True, 'enrolled': bool(self.secret)}
+            account = self.request('/api/me') if self.secret else self.request('/api/info')
+            self.cached = {**account, 'enabled': True, 'enrolled': bool(self.secret)}
             return dict(self.cached)
 
     def enroll(self, payload):

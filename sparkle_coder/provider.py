@@ -139,7 +139,8 @@ class NemotronClient:
             headers["Content-Type"] = "application/json"
         if payload is not None and self.config._runtime_cloud:
             headers["Idempotency-Key"] = uuid.uuid4().hex
-        attempts = 6 if self.config._runtime_cloud else 3
+        attempts = 100 if self.config._runtime_cloud else 3
+        recovery_deadline = time.monotonic() + max(300, self.config.request_timeout)
         retry_transport = body is None or self.config._runtime_cloud
         for attempt in range(attempts):
             if self.should_stop():
@@ -154,14 +155,14 @@ class NemotronClient:
             except urllib.error.HTTPError as exc:
                 exc.close()
                 if (exc.code == 429 or retry_transport and exc.code in (500, 502, 503, 504) or
-                        self.config._runtime_cloud and exc.code == 409 and exc.headers.get("Retry-After")) and attempt < attempts - 1:
+                        self.config._runtime_cloud and exc.code == 409 and exc.headers.get("Retry-After")) and attempt < attempts - 1 and time.monotonic() < recovery_deadline:
                     if self.config._runtime_cloud and exc.code == 429 and exc.headers.get('X-Sparkle-Safe-Retry') == 'true':
                         # The gateway confirmed no inference charge for this ID.
                         headers['Idempotency-Key'] = uuid.uuid4().hex
                     try:
                         delay = min(60, max(1, float(exc.headers.get("Retry-After", 2 ** attempt))))
                     except (ValueError, TypeError):
-                        delay = 2 ** attempt
+                        delay = min(60, 2 ** attempt)
                     self.observe("model_retry", {"attempt": attempt + 2, "delay": delay,
                                                  "reason": f"Model API HTTP {exc.code}"})
                     self.wait_retry(delay)
@@ -178,8 +179,8 @@ class NemotronClient:
                 raise ModelError(f"Model API HTTP {exc.code}. {hints.get(exc.code, 'The endpoint is unavailable. Resume this saved task when it recovers.')}",
                                  action="connection" if exc.code in (400, 401, 402, 403, 404) else "retry") from None
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                if retry_transport and attempt < attempts - 1:
-                    delay = 2 ** attempt
+                if retry_transport and attempt < attempts - 1 and time.monotonic() < recovery_deadline:
+                    delay = min(15, 2 ** attempt)
                     self.observe("model_retry", {"attempt": attempt + 2, "delay": delay,
                                                  "reason": f"Connection interrupted ({type(exc).__name__})"})
                     self.wait_retry(delay)

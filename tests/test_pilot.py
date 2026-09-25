@@ -21,6 +21,16 @@ from sparkle_coder.workspace import Workspace
 
 
 class EfficiencyTests(unittest.TestCase):
+    def test_busy_pilot_keeps_waiting_beyond_six_short_retries(self):
+        config=Config();config._runtime_cloud=True;client=NemotronClient(config)
+        busy=urllib.error.HTTPError(config.base_url,429,'Busy',{'Retry-After':'3'},None)
+        result=b'{"choices":[{"message":{"content":"Slot available"}}]}'
+        with patch.object(client,'_read',side_effect=[busy]*8+[result]) as read,patch.object(client,'wait_retry'):
+            self.assertEqual(client.complete([{'role':'user','content':'Build'}],[]).content,'Slot available')
+        self.assertEqual(read.call_count,9)
+        keys={call.args[0].get_header('Idempotency-key') for call in read.call_args_list}
+        self.assertEqual(len(keys),1)
+
     def test_historical_file_writes_shrink_without_losing_original_or_pairing(self):
         code = 'body { color: green; }\n' * 1448
         group = [{'role':'assistant','content':'','tool_calls':[{'id':'write-1','type':'function','function':{'name':'write_file','arguments':json.dumps({'path':'styles.css','content':code})}}]},
