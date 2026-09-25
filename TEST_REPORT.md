@@ -2,6 +2,36 @@
 
 Validated locally on Linux and through native GitHub runners on 2026-09-25. No real NVIDIA key or payment was used.
 
+## Cloudflare deployment handling repair — 2026-09-25
+
+The owner's latest terminal output confirms the initial remote migration
+completed, followed by a failed `wrangler deploy`. The previous setup captured
+stdout/stderr and discarded them on failure, so the actual Cloudflare cause
+was not visible. It also removed stdout's TTY, which makes Wrangler decline
+interactive first-account subdomain registration. That is a possible cause,
+not a confirmed diagnosis of the owner's deployment.
+
+Deployment now inherits the terminal and uses Wrangler's documented
+`WRANGLER_OUTPUT_FILE_PATH` ND-JSON output for its address. Setup requires a
+successful version and matching Worker URL before asking for the NVIDIA key.
+Failed captured commands show their diagnostics; echoed secret-input values
+are redacted. Existing database IDs and owner credentials are preserved.
+
+- **195 Python tests passed**, including 15 owner-setup tests. New cases cover
+  deployment failure before key entry, stdout/stderr from a real child process,
+  secret-input redaction, cancelled deployment, and wrong/stale URL rejection.
+- The actual pinned **Wrangler 4.138.0 `deploy --dry-run` passed** with the Worker,
+  static assets and bindings. This does not perform a remote deployment.
+- A real terminal subprocess confirmed both stdin and stdout remain TTYs and
+  successfully accepted an interactive prompt through the repaired wrapper.
+- The owner subsequently supplied a live URL. Browser inspection confirmed the
+  workspace and account-request form load and `/admin` shows its password form.
+  Creating a scratch file, saving it and reopening its contents after a reload
+  passed. The browser's download wait timed out, so download remains unverified.
+  Direct `/api/info` navigation was blocked by the browser client; payment
+  configuration could not be confirmed. No admin password, payment approval or
+  live NVIDIA inference was exercised.
+
 ## Cloudflare migration repair — 2026-09-25
 
 The owner reported `incomplete input: SQLITE_ERROR [code: 7500]` from remote

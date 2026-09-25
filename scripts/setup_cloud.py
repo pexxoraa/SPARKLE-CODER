@@ -24,6 +24,65 @@ def save(path,data):
     with os.fdopen(descriptor,'w',encoding='utf-8') as file:json.dump(data,file,indent=2);file.write('\n')
 
 
+def run_wrangler(command,*args,capture=False,input_text=None,config=True,output_path=None):
+    """Keep interactive commands on the terminal; expose failed captured commands."""
+    environment={**os.environ,'WRANGLER_SEND_METRICS':'false','NO_COLOR':'1'}
+    if output_path is not None:environment['WRANGLER_OUTPUT_FILE_PATH']=str(output_path)
+    try:
+        result=subprocess.run([*command,*args,*(['--config',str(OWNER/'wrangler.json')] if config else [])],
+            cwd=ROOT/'gateway',check=True,text=True,input=input_text,capture_output=capture,env=environment)
+    except subprocess.CalledProcessError as error:
+        details='\n'.join(part for part in (error.stdout,error.stderr) if part)
+        # Secret uploads use stdin. Do not repeat values if the CLI echoes input
+        # in a diagnostic; the command arguments never contain these values.
+        if input_text:
+            details=details.replace(input_text,'[redacted]')
+            try:values=json.loads(input_text)
+            except ValueError:values={}
+            if isinstance(values,dict):
+                for value in values.values():
+                    if isinstance(value,str) and value:details=details.replace(value,'[redacted]')
+        if details.strip():print(details,file=sys.stderr,flush=True)
+        raise
+    return result.stdout if capture else ''
+
+
+def deployment_url(path,worker_name):
+    """Read this invocation's documented Wrangler output, not terminal text."""
+    deployment=None
+    for line in path.read_text(encoding='utf-8').splitlines():
+        try:entry=json.loads(line)
+        except ValueError:continue
+        if isinstance(entry,dict) and entry.get('type')=='deploy' and entry.get('worker_name')==worker_name:
+            deployment=entry
+    if deployment and deployment.get('version')==1 and deployment.get('version_id'):
+        targets=deployment.get('targets')
+        for target in targets if isinstance(targets,list) else []:
+            if isinstance(target,str) and re.fullmatch(
+                    r'(?:https://)?'+re.escape(worker_name)+r'\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.workers\.dev/?',target):
+                return (target if target.startswith('https://') else 'https://'+target).rstrip('/')
+    raise SystemExit('Wrangler did not confirm a completed deployment with a workers.dev URL for '+worker_name+'. '
+                     'Check the output above and rerun setup in the same folder. Keep gateway/.owner and the existing database. '
+                     'No secrets were uploaded by this run.')
+
+
+def deploy_worker(run,worker_name):
+    print('Deploying Worker. Cloudflare progress, errors and setup prompts will appear below.',flush=True)
+    print('If asked to register a workers.dev subdomain, choose a name for your free server address.',flush=True)
+    # Piping stdout makes Wrangler non-interactive and can silently decline
+    # first-account onboarding. Inherit the terminal and read its separate
+    # ND-JSON output file instead. A fresh file cannot reuse a previous URL.
+    with tempfile.TemporaryDirectory(prefix='deploy-',dir=OWNER) as temporary:
+        output_path=Path(temporary)/'result.ndjson'
+        save(output_path,{})
+        try:run('deploy',output_path=output_path)
+        except subprocess.CalledProcessError as error:
+            raise SystemExit('Worker deployment did not complete. Read the Cloudflare error above. '
+                             'Keep gateway/.owner and the existing database, then rerun setup in the same folder. '
+                             'The NVIDIA key was not requested or uploaded by this run.') from error
+        return deployment_url(output_path,worker_name)
+
+
 def check_migrations(directory):
     """Validate locally and normalize ZIP/editor line endings before any cloud writes."""
     paths=sorted(directory.glob('*.sql'))
@@ -54,7 +113,6 @@ def apply_migrations(run,name):
         output=run('d1','migrations','apply',name,'--remote',capture=True)
     except subprocess.CalledProcessError as error:
         output=(error.stdout or '')+'\n'+(error.stderr or '')
-        print(output,file=sys.stderr)
         if 'incomplete input' not in output or 'SQLITE_ERROR' not in output:raise
         # The remote /query splitter can reject valid compound triggers. Use
         # Wrangler's documented file import path only for a confirmed empty DB.
@@ -109,11 +167,7 @@ def main(*,check_only=False):
     print('You need your own Cloudflare account, NVIDIA key, UPI ID and recipient name. Do not paste secrets in chat.')
     subprocess.run([npm,'ci'],cwd=ROOT/'gateway',check=True)
     command=[npx,'--no-install','wrangler']
-    def run(*args,capture=False,input_text=None,config=True):
-        result=subprocess.run([*command,*args,*(['--config',str(OWNER/'wrangler.json')] if config else [])],
-          cwd=ROOT/'gateway',check=True,text=True,input=input_text,capture_output=capture,
-          env={**os.environ,'WRANGLER_SEND_METRICS':'false','NO_COLOR':'1'})
-        return result.stdout if capture else ''
+    def run(*args,**kwargs):return run_wrangler(command,*args,**kwargs)
     # Cloudflare performs account selection and secure authentication itself.
     run('login',config=False)
     config_path=OWNER/'wrangler.json'
@@ -149,6 +203,9 @@ def main(*,check_only=False):
         raise SystemExit('Database setup did not finish. Keep gateway/.owner and the existing D1 database. '
                          'Update the program files, then rerun python scripts/setup_cloud.py in this folder. '
                          'If it fails again, share the error above, not credentials. No Worker deployment was attempted.') from error
+    # Publish locked endpoints before requesting any NVIDIA credential. Deploy
+    # needs the owner's terminal for account onboarding and confirmations.
+    url=deploy_worker(run,config['name'])
     credentials_path=OWNER/'admin-credentials.json'
     if credentials_path.exists():credentials=json.loads(credentials_path.read_text())
     else:
@@ -156,14 +213,9 @@ def main(*,check_only=False):
         save(credentials_path,credentials)
     key=getpass.getpass('NVIDIA API key (hidden; uploaded only as a Worker secret): ').strip()
     if not key:raise SystemExit('NVIDIA key is required. It is not saved in source or the installer.')
-    # Publish locked endpoints first, then upload all secrets via stdin, never command arguments.
-    output=run('deploy',capture=True)
-    run('secret','bulk',input_text=json.dumps({**credentials,'NVIDIA_API_KEY':key}))
-    key=''
-    urls=re.findall(r'https://[a-z0-9.-]+\.workers\.dev',output)
-    if not urls:
-        print(output);raise SystemExit('Worker deployed. Copy its HTTPS URL from Cloudflare, then run scripts/configure_pilot.py --url URL.')
-    url=urls[-1]
+    try:run('secret','bulk',capture=True,input_text=json.dumps({**credentials,'NVIDIA_API_KEY':key}))
+    finally:key=''
+    print('Worker secrets uploaded. Checking the deployed server.',flush=True)
     with urllib.request.urlopen(url+'/api/info',timeout=30) as response:info=json.loads(response.read())
     if info.get('upi_id')!=variables['UPI_ID']:raise SystemExit('Payment details did not match the deployment. Do not distribute yet.')
     subprocess.run([sys.executable,str(ROOT/'scripts/configure_pilot.py'),'--url',url],check=True)

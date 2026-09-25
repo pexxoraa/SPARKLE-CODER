@@ -33,6 +33,27 @@ the saved deployment configuration. If database creation succeeded but parsing
 its identifier failed, copy that database ID into `.owner/wrangler.json` first.
 Do not create a new database for an app update: balances live in the original DB.
 
+### Recover from a deployment failure after migration succeeds
+
+If the migration has a check mark but setup stops at `wrangler deploy`, the
+database step has finished. Older setup scripts captured deployment output,
+hiding the actual error and disabling interactive Cloudflare prompts. Update
+`scripts/setup_cloud.py` in the same folder and rerun it, keeping `gateway/.owner`.
+Do not repeat the initial SQL import or create another database.
+
+Deployment now runs directly in your terminal, so progress, error messages and
+Cloudflare questions remain visible. On a new Workers account, Wrangler may ask
+to register a `workers.dev` subdomain. Choose an available name for the free
+server address when prompted. This is one possible cause of a first deployment
+failure; the generic exit-code message alone does not establish the cause.
+
+The NVIDIA key prompt now follows a confirmed deployment. Setup reads the
+server address from Wrangler's separate structured output, and refuses to use
+a missing, cancelled or old deployment result. It then uploads secrets through
+stdin and checks the live server before configuring the tester edition.
+If deployment fails again, share the actual Cloudflare error shown above the
+setup message. Keep credentials private.
+
 ### Recover from `incomplete input: SQLITE_ERROR [code: 7500]`
 
 This error can occur when D1's remote SQL parser splits a trigger body. It does

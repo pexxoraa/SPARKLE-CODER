@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -167,7 +168,16 @@ class CloudSetupTests(unittest.TestCase):
         calls=[]
         def command(args,**kwargs):
             calls.append((args,kwargs))
-            output='https://saved-pilot.example.workers.dev' if 'deploy' in args else ''
+            output=''
+            if 'deploy' in args:
+                self.assertFalse(kwargs['capture_output'])
+                self.assertIsNone(kwargs['input'])
+                self.assertNotIn('stdout',kwargs)
+                self.assertNotIn('stderr',kwargs)
+                self.assertNotIn('stdin',kwargs)
+                path=Path(kwargs['env']['WRANGLER_OUTPUT_FILE_PATH'])
+                path.write_text(json.dumps({'type':'deploy','version':1,'worker_name':'saved-pilot',
+                    'version_id':'test-version','targets':['saved-pilot.example.workers.dev','schedule: */15 * * * *']})+'\n')
             if '--json' in args:output=json.dumps([{'success':True,'results':[{'name':'0001_pilot.sql'}]}])
             return subprocess.CompletedProcess(args,0,stdout=output)
         response=io.BytesIO(b'{"upi_id":"owner@bank"}')
@@ -183,6 +193,89 @@ class CloudSetupTests(unittest.TestCase):
         self.assertEqual(json.loads(secret_call[1]['input']),{**credentials,'NVIDIA_API_KEY':'fake-nvidia-key'})
         self.assertNotIn('fake-nvidia-key',str([args for args,_ in calls]))
         self.assertNotIn('fake-nvidia-key',self.output.getvalue())
+        self.assertEqual(json.loads((self.owner/'deployment.json').read_text())['gateway_url'],
+                         'https://saved-pilot.example.workers.dev')
+        self.assertEqual(list(self.owner.glob('deploy-*')),[])
+
+    def test_failed_deploy_exposes_error_before_requesting_any_key(self):
+        config=self.saved_config()
+        calls=[]
+        def command(args,**kwargs):
+            calls.append(args)
+            if 'deploy' in args:
+                self.assertFalse(kwargs['capture_output'])
+                raise subprocess.CalledProcessError(1,args,output='Cloudflare deploy progress',
+                    stderr='You need to register a workers.dev subdomain before publishing to workers.dev')
+            output=json.dumps([{'success':True,'results':[{'name':'0001_pilot.sql'}]}]) if '--json' in args else ''
+            return subprocess.CompletedProcess(args,0,stdout=output)
+        with patch.object(setup_cloud.shutil,'which',side_effect=lambda name:name), \
+             patch.object(setup_cloud.subprocess,'run',side_effect=command), \
+             patch('builtins.input',return_value=''), \
+             patch.object(setup_cloud.getpass,'getpass') as secret, \
+             patch.object(setup_cloud.urllib.request,'urlopen') as health:
+            with self.assertRaisesRegex(SystemExit,'NVIDIA key was not requested'):
+                setup_cloud.main()
+        secret.assert_not_called();health.assert_not_called()
+        self.assertIn('Cloudflare deploy progress',self.output.getvalue())
+        self.assertIn('You need to register a workers.dev subdomain',self.output.getvalue())
+        self.assertFalse(any('create' in args or 'secret' in args or any('configure_pilot' in a for a in args) for args in calls))
+        self.assertEqual(json.loads((self.owner/'wrangler.json').read_text())['d1_databases'][0]['database_id'],
+                         config['d1_databases'][0]['database_id'])
+        self.assertFalse((self.owner/'admin-credentials.json').exists())
+        self.assertFalse((self.owner/'deployment.json').exists())
+        self.assertEqual(list(self.owner.glob('deploy-*')),[])
+
+    def test_real_failed_child_prints_captured_stdout_and_stderr(self):
+        child=[sys.executable,'-c',
+            "import sys; print('upload progress'); print('Cloudflare: specific failure',file=sys.stderr); sys.exit(1)"]
+        with self.assertRaises(subprocess.CalledProcessError):
+            setup_cloud.run_wrangler(child,config=False,capture=True)
+        self.assertIn('upload progress',self.output.getvalue())
+        self.assertIn('Cloudflare: specific failure',self.output.getvalue())
+
+    def test_real_failed_secret_child_redacts_echoed_stdin(self):
+        values={'NVIDIA_API_KEY':'fake-nvidia-value','ADMIN_SECRET':'fake-admin-value','CACHE_SECRET':'fake-cache-value'}
+        child=[sys.executable,'-c',
+            "import sys,json; data=sys.stdin.read(); print(data); print('Secret upload failed',file=sys.stderr); "
+            "print(json.loads(data)['NVIDIA_API_KEY'],file=sys.stderr); sys.exit(1)"]
+        with self.assertRaises(subprocess.CalledProcessError):
+            setup_cloud.run_wrangler(child,config=False,capture=True,input_text=json.dumps(values))
+        self.assertIn('Secret upload failed',self.output.getvalue())
+        self.assertIn('[redacted]',self.output.getvalue())
+        for value in values.values():self.assertNotIn(value,self.output.getvalue())
+
+    def test_deploy_url_requires_success_for_this_worker(self):
+        path=self.owner/'output.ndjson'
+        valid={'type':'deploy','version':1,'worker_name':'saved-pilot','version_id':'test-version',
+               'targets':['saved-pilot.example.workers.dev']}
+        for target in ('saved-pilot.example.workers.dev','https://saved-pilot.example.workers.dev/'):
+            path.write_text(json.dumps({**valid,'targets':[target]})+'\n')
+            self.assertEqual(setup_cloud.deployment_url(path,'saved-pilot'),'https://saved-pilot.example.workers.dev')
+        rejected=[{}, {**valid,'version_id':None}, {**valid,'worker_name':'other-worker'}, {**valid,'version':2},
+                  {**valid,'targets':None}, {**valid,'targets':['https://saved-pilot.example.workers.dev.evil.test']},
+                  {**valid,'targets':['https://preview-saved-pilot.example.workers.dev']},
+                  {**valid,'targets':['http://saved-pilot.example.workers.dev']},
+                  {**valid,'targets':['https://saved-pilot.example.workers.dev/private']}]
+        for entry in rejected:
+            with self.subTest(entry=entry):
+                path.write_text('not JSON\n'+json.dumps(entry)+'\n')
+                with self.assertRaisesRegex(SystemExit,'did not confirm'):
+                    setup_cloud.deployment_url(path,'saved-pilot')
+        # A later cancelled result cannot reuse an earlier successful version.
+        path.write_text(json.dumps(valid)+'\n'+json.dumps({**valid,'version_id':None})+'\n')
+        with self.assertRaisesRegex(SystemExit,'did not confirm'):
+            setup_cloud.deployment_url(path,'saved-pilot')
+
+    def test_cancelled_deploy_cannot_reuse_previous_saved_url(self):
+        setup_cloud.save(self.owner/'deployment.json',{'gateway_url':'https://saved-pilot.old.workers.dev'})
+        def cancelled(*args,**kwargs):
+            self.assertEqual(args,('deploy',))
+            return 'Cancelled'
+        with self.assertRaisesRegex(SystemExit,'did not confirm'):
+            setup_cloud.deploy_worker(cancelled,'saved-pilot')
+        self.assertEqual(list(self.owner.glob('deploy-*')),[])
+        self.assertEqual(json.loads((self.owner/'deployment.json').read_text())['gateway_url'],
+                         'https://saved-pilot.old.workers.dev')
 
 
 if __name__=='__main__':unittest.main()
