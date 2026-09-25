@@ -331,8 +331,9 @@ function renderAccount() {
   id('accountBalance').hidden=!a.ready;
   id('creditAmount').textContent=Number(a.available_tokens||0).toLocaleString();
   id('creditHeld').textContent=a.held_tokens?Number(a.held_tokens).toLocaleString()+' tokens temporarily reserved':'';
-  id('accountMessage').textContent=a.ready?'Connected as '+a.name:a.enrolled?(a.status==='suspended'?'Account suspended. Contact the admin.':'Request received. Payment or device approval is pending.'):'Enter your details to request access.';
   const pending=(a.payments||[]).some(p=>p.status==='pending');
+  id('accountMessage').textContent=a.ready?'Connected as '+a.name:a.enrolled?(a.status==='suspended'?'Account suspended. Contact the admin.':a.kind==='recovery'?'Device reconnection received. Waiting for admin identity verification.':pending?'Payment reference received. Waiting for admin verification.':a.upi_id&&a.payee_name?'Account request received. Pay ₹15 using the details below and submit your transaction reference for admin review.':'Account request received.'):'Enter your details to request access.';
+  if(a.enrolled&&!a.ready&&a.request_id)id('accountMessage').textContent+=' Request: '+a.request_id+'.';
   id('paymentSection').hidden=!a.enrolled||!a.upi_id||!a.payee_name||pending||a.status==='suspended'||a.kind==='recovery'&&!a.ready;
   id('payUpiId').value=a.upi_id||'';id('payeeName').textContent='Recipient: '+(a.payee_name||'Not configured');
   if(a.enrolled&&(!a.upi_id||!a.payee_name))id('accountMessage').textContent+=' The admin has not enabled payments yet. Do not send payment.';

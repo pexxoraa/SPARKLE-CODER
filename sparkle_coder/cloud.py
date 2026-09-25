@@ -87,10 +87,16 @@ class CloudAccount:
                 self.credentials = {'server': self.url, 'device_secret': secrets.token_urlsafe(48), 'registered': False}
                 write_json(self.path, self.credentials)
             result = self.request('/api/enroll', payload)
+            if (result.get('error') or not isinstance(result.get('id'), str) or not result['id']
+                    or result.get('device_status') not in {'pending', 'active'}
+                    or result.get('kind') not in {'signup', 'recovery'}):
+                raise ValueError('The server did not confirm your account request. Retry or contact the admin.')
             self.credentials['registered'] = True
             write_json(self.path, self.credentials)
             self.cached = {**result, 'enabled': True, 'enrolled': True}
-            return self.status()
+            # A disconnected follow-up request must not turn a successful
+            # enrollment into an apparent signup failure.
+            return dict(self.cached)
 
     def payment(self, payload):
         if set(payload) != {'utr'}:

@@ -130,6 +130,16 @@ must verify identity. Reconnection preserves credits and revokes the old device.
 ## Admin: accept a payment
 
 Open the printed `/admin` address and sign in with your generated admin password.
+New signups appear immediately in **Account requests**, before any payment is
+submitted. The dashboard updates every 30 seconds while visible; **Refresh**
+checks immediately. Each request shows the tester's name, email, phone, received
+time and request reference. Use that reference to match the tester's receipt.
+Account requests and submitted payments are separate: signup alone issues no
+credits. A submitted payment adds a link from the account request to its review.
+Background updates preserve your unfinished review notes and verification
+checkboxes. If an update fails, the last checked status warns that the list may
+be out of date.
+
 Under **Payments**, compare the ₹15 amount, UTR and payer with the actual credit
 in your bank/UPI app. Check the verification box, then select **Accept + 1M tokens**.
 The server updates the account and ledger in one database transaction.

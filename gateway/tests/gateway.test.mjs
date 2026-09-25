@@ -35,6 +35,33 @@ test('registration, manual payment approval, exact credit pack and no double cre
  assert.equal((await f.api('/api/me')).body.balance_tokens,1000000);
  assert.equal(f.env.DB.db.prepare('SELECT COUNT(*) AS n FROM ledger').get().n,1);
 });
+test('signup receipt appears in admin before payment and retry cannot duplicate it',async()=>{
+ const f=fixture(),receipt=await f.enroll();await f.login();
+ assert.equal(receipt.name,'Test user');assert.equal(receipt.ready,false);assert.equal(receipt.balance_tokens,0);
+ assert.ok(receipt.request_id);assert.ok(receipt.requested_at>0);
+ let overview=(await f.api('/api/admin/overview',undefined,{admin:true})).body;
+ assert.equal(overview.payments.length,0);assert.equal(overview.devices.length,1);
+ assert.equal(overview.devices[0].id,receipt.request_id);assert.equal(overview.devices[0].account_id,receipt.id);
+ assert.equal(overview.devices[0].created,receipt.requested_at);assert.equal(overview.devices[0].kind,'signup');
+ assert.equal(overview.devices[0].email,'tester@example.com');assert.equal(overview.devices[0].account_status,'pending');
+ assert.equal(overview.audit[0].action,'account-requested');assert.equal(overview.audit[0].reference,receipt.request_id);
+ assert.ok(!JSON.stringify(overview).includes(f.device));assert.ok(!JSON.stringify(overview).includes('secret_hash'));
+ const retry=await f.api('/api/enroll',{name:'Test user',email:'tester@example.com',consent:true});
+ assert.equal(retry.status,200);assert.equal(retry.body.request_id,receipt.request_id);
+ overview=(await f.api('/api/admin/overview',undefined,{admin:true})).body;
+ assert.equal(overview.accounts.length,1);assert.equal(overview.devices.length,1);assert.equal(overview.audit.length,1);
+ const payment=await f.api('/api/payments',{utr:'VISIBLE12345678'});
+ await f.api('/api/admin/payments/'+payment.body.id,{action:'approve',verified:true},{admin:true});
+ assert.equal((await f.api('/api/admin/overview',undefined,{admin:true})).body.devices.length,0);
+ assert.equal((await f.api('/api/me')).body.available_tokens,1000000);
+});
+test('database write failure never returns a signup receipt or a false capacity error',async()=>{
+ const f=fixture();
+ f.env.DB.db.exec("CREATE TRIGGER fail_account_audit BEFORE INSERT ON audit WHEN NEW.action='account-requested' BEGIN SELECT RAISE(ABORT,'Simulated storage failure'); END");
+ const result=await f.api('/api/enroll',{name:'Test user',email:'tester@example.com',consent:true});
+ assert.equal(result.status,500);assert.ok(!result.body.request_id);assert.doesNotMatch(result.body.error,/full|registered/);
+ for(const table of ['accounts','devices','audit'])assert.equal(f.env.DB.db.prepare('SELECT COUNT(*) AS n FROM '+table).get().n,0);
+});
 test('pending accounts cannot infer and approval requires bank verification',async()=>{
  const f=fixture();await f.enroll();assert.equal((await f.infer()).status,403);await f.login();
  const payment=await f.api('/api/payments',{utr:'123456789012'});

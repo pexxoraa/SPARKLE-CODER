@@ -78,6 +78,43 @@ class EfficiencyTests(unittest.TestCase):
         self.assertEqual(response.usage,{'prompt_tokens':0,'completion_tokens':3})
 
 
+class AccountReceiptTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.account=CloudAccount(self.temporary.name,'https://sparkle.example')
+        self.payload={'name':'Tester','email':'tester@example.test','consent':True}
+        self.receipt={'id':'account-1','request_id':'request-1','kind':'signup',
+                      'device_status':'pending','status':'pending','ready':False}
+
+    def test_confirmed_signup_does_not_fail_because_of_a_second_network_request(self):
+        def request(path,payload=None):
+            if path=='/api/enroll':return dict(self.receipt)
+            raise ValueError('Connection lost after signup was saved')
+        with patch.object(self.account,'request',side_effect=request) as call:
+            result=self.account.enroll(self.payload)
+        self.assertTrue(result['enrolled']);self.assertEqual(result['request_id'],'request-1')
+        self.assertFalse(result['ready']);self.assertEqual(call.call_count,1)
+        self.assertTrue(json.loads(self.account.path.read_text())['registered'])
+
+    def test_unconfirmed_response_never_marks_the_account_registered(self):
+        for response in ({},{'ok':True},{'error':'Request failed'},{**self.receipt,'error':'Request failed'},
+                         {**self.receipt,'device_status':'revoked'}):
+            with self.subTest(response=response),patch.object(self.account,'request',return_value=response):
+                with self.assertRaisesRegex(ValueError,'did not confirm'):
+                    self.account.enroll(self.payload)
+                self.assertFalse(self.account.credentials['registered'])
+                self.assertFalse(json.loads(self.account.path.read_text())['registered'])
+
+    def test_retry_after_a_lost_response_reuses_the_saved_device_connection(self):
+        with patch.object(self.account,'request',side_effect=ValueError('Response lost')):
+            with self.assertRaises(ValueError):self.account.enroll(self.payload)
+        original=json.loads(self.account.path.read_text())['device_secret']
+        reopened=CloudAccount(self.temporary.name,'https://sparkle.example')
+        with patch.object(reopened,'request',return_value=self.receipt):result=reopened.enroll(self.payload)
+        self.assertEqual(reopened.secret,original);self.assertTrue(result['enrolled'])
+
+
 @unittest.skipUnless(shutil.which('node'),'Node 24 required for gateway integration')
 class DesktopGatewayTests(unittest.TestCase):
     def test_signup_approval_model_usage_restart_and_credit_reload(self):
@@ -104,6 +141,12 @@ class DesktopGatewayTests(unittest.TestCase):
             self.assertGreater(len(token),43)
             self.assertNotIn(token,json.dumps(app.state()))
             self.assertNotIn(token,app.settings_path.read_text())
+            admin('login',{'password':'test-admin-'*8})
+            overview=admin('overview')
+            self.assertEqual(overview['payments'],[])
+            self.assertEqual(overview['devices'][0]['id'],account['request_id'])
+            self.assertEqual(overview['devices'][0]['email'],'pilot@example.com')
+            self.assertEqual(overview['audit'][0]['action'],'account-requested')
             with self.assertRaisesRegex(ValueError,'managed by the admin'):
                 app.configure({'base_url':'https://attacker.example/v1','api_key':'oops'})
             app.account.payment({'utr':'123456789012'})
